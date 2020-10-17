@@ -108,7 +108,7 @@ void setup(){
   
   // Initialize the Trellis
   trellis.begin();
-  trellis.setBrightness(20);  
+  //trellis.setBrightness(20);  
 
   AudioMemory(120);
 
@@ -125,13 +125,6 @@ void setup(){
   // Initialize processor and memory measurements
   AudioProcessorUsageMaxReset();
   AudioMemoryUsageMaxReset();
-}
-
-void wtfSetPitch(float freq) {
-  for (int i=0; i<4; i++) {
-    Operator op = Bank[currentPatch].operators[i];
-    oscs[i]->frequency(op.baseFrequency + freq*op.multiplier);
-  }
 }
 
 void setPitch(float freq) {
@@ -158,25 +151,38 @@ void noteOff() {
   }
   AudioInterrupts();
 }
- 
+
+#define BUTTON_UP 7
+#define BUTTON_RESET 15
+#define BUTTON_DOWN 31
+#define BUTTON_PITCH 24
+
+int16_t pitchAdjust = 0;
+#define PITCH_RANGE
+
 void trellisLoop() {
   trellis.tick();
   
-  while (trellis.available()) {
-    keypadEvent e = trellis.read();
-    int keyindex = e.bit.KEY;
-    if (e.bit.EVENT == KEY_JUST_PRESSED) {
-      trellis.setPixelColor(keyindex, 0x600000);
-      noteOn(JustPitches[NOTE_D3 + keyindex]);
-    } else if (e.bit.EVENT == KEY_JUST_RELEASED){
-      noteOff();
-      trellis.setPixelColor(keyindex, 0);
+  // Pitch adjust
+  if (trellis.isPressed(BUTTON_PITCH)) {
+    if (trellis.isPressed(BUTTON_DOWN)) {
+      pitchAdjust -= 4;
     }
+    if (trellis.isPressed(BUTTON_UP)) {
+      pitchAdjust += 4;
+    }
+    if (trellis.isPressed(BUTTON_RESET)) {
+      pitchAdjust = 0;
+    }
+
+    float adj = pow(2, pitchAdjust / 32768.0);
+    setupJustPitches(NOTE_D4, PITCH_D4*adj);
+    trellis.setPixelColor(BUTTON_PITCH, trellis.ColorHSV(uint16_t(pitchAdjust), 255, 80));
   }
 }
 
-#define CLOSEDVAL  0x30
-#define OPENVAL 0x70
+const uint8_t CLOSEDVAL=0x30;
+const uint8_t OPENVAL=0x70;
 
 bool playing = false;
 
@@ -196,6 +202,7 @@ void loop() {
   for (int i = 0; i < 8; i++) {
     uint16_t val = cap.filteredData(i+KEY_OFFSET);
     uint8_t c = 0;
+
     if (val < OPENVAL) {
       bitSet(keys, i);
       c = 7;
@@ -212,6 +219,7 @@ void loop() {
     }
     // print key states
     oled.rectFill(32 - 4*i, 40, 3, c);
+    trellis.setPixelColor(i, 1 << c);
   }
   
   note = uilleann_matrix[keys];
@@ -222,6 +230,7 @@ void loop() {
   bool galt = gnote & 0x80;
   note = note & 0x7f;
   gnote = gnote & 0x7f;
+
 
   // All keys closed + knee = no sound
   if (knee) {
