@@ -59,12 +59,6 @@ void setupJustPitches(uint8_t baseNote, float basePitch) {
 }
 
 void loadPatch(Patch p) {
-  oled.clear(PAGE);
-  oled.setFontType(0);
-  oled.setCursor(0, 0);
-  oled.print(p.name);
-  oled.display();
-  
   for (int i=0; i<4; i++) {
     Operator op = p.operators[i];
 
@@ -90,38 +84,32 @@ void setup(){
   // Initialize OLED display
   oled.begin();
   oled.clear(ALL);
-  oled.display();
 
-  // Initialize touch sensor
-  if (!cap.begin(0x5A)) {
-    oled.clear(PAGE);
-    oled.print("Can't find MPR121");
-    oled.display();
-
-    bool on = HIGH;
-    while (1) {
-      digitalWrite(LED_BUILTIN, on);
-      on = ! on;
-      delay(200);
-    }
-  }
-  
   // Initialize the Trellis
   trellis.begin();
-  //trellis.setBrightness(20);  
 
+  // Initialize touch sensor
+  bool blink = true;
+  while (!cap.begin(0x5A)) {
+    oled.clear(PAGE);
+    oled.setCursor(0, 0);
+    oled.print("No Pipe?");
+    oled.display();
+
+    trellis.setPixelColor(0, blink?0xff6666:0);
+    blink = !blink;
+    delay(200);
+  }
+
+  // Set aside some memory for the audio library  
   AudioMemory(120);
 
-  // Turn it down, man
-  mixL.gain(0, 0.05);
-  mixR.gain(0, 0.05);
+  // initialize tunables
+  updateTunables(3, 0);
 
   // Set up high shelf filter, for vibrato effects
   biquad1.setHighShelf(0, 1100, 1.0, 1);
 
-  // load the patch
-  loadPatch(Bank[0]);
-  
   // Initialize processor and memory measurements
   AudioProcessorUsageMaxReset();
   AudioMemoryUsageMaxReset();
@@ -152,53 +140,104 @@ void noteOff() {
   AudioInterrupts();
 }
 
-#define BUTTON_UP 7
-#define BUTTON_RESET 15
-#define BUTTON_DOWN 31
-#define BUTTON_PITCH 24
-
-int16_t pitchAdjust = 0;
-#define PITCH_RANGE
-
-void trellisLoop() {
-  trellis.tick();
-  
-  // Pitch adjust
-  if (trellis.isPressed(BUTTON_PITCH)) {
-    if (trellis.isPressed(BUTTON_DOWN)) {
-      pitchAdjust -= 4;
-    }
-    if (trellis.isPressed(BUTTON_UP)) {
-      pitchAdjust += 4;
-    }
-    if (trellis.isPressed(BUTTON_RESET)) {
-      pitchAdjust = 0;
-    }
-
-    float adj = pow(2, pitchAdjust / 32768.0);
-    setupJustPitches(NOTE_D4, PITCH_D4*adj);
-    trellis.setPixelColor(BUTTON_PITCH, trellis.ColorHSV(uint16_t(pitchAdjust), 255, 80));
-  }
-}
+#define BUTTON_UP 0
+#define BUTTON_DOWN 8
+#define BUTTON_PATCH 12
+#define BUTTON_PITCH 14
+#define BUTTON_VOLUME 15
 
 const uint8_t CLOSEDVAL=0x30;
 const uint8_t OPENVAL=0x70;
+
+#define INIT_PITCH_ADJUST 0
+#define INIT_GAIN 0.1
+#define INIT_PATCH 0
+
+int16_t pitchAdjust;
+float gain;
+int patch;
+
+void updateTunables(uint8_t buttons, int note) {
+  // Pitch adjust if playing A
+  if (!note || (note == NOTE_A4)) {
+    switch (buttons) {
+    case 3:
+      pitchAdjust = INIT_PITCH_ADJUST;
+      break;
+    case 2:
+      pitchAdjust += 4;
+      break;
+    case 1:
+      pitchAdjust -= 4;
+      break;
+    }
+  }
+
+  float adj = pow(2, pitchAdjust / 32768.0);
+  setupJustPitches(NOTE_D4, PITCH_D4*adj);
+  trellis.setPixelColor(BUTTON_PITCH, trellis.ColorHSV(uint16_t(pitchAdjust), 255, 80));
+
+  if (!note || (note == NOTE_G4)) {
+    // Volume adjust if playing G
+    switch (buttons) {
+    case 3:
+      gain = INIT_GAIN;
+      break;
+    case 2:
+      gain = min(gain+0.005, 1.0);
+      break;
+    case 1:
+      gain = max(gain-0.005, 0.0);
+      break;
+    }
+  }
+
+  mixL.gain(0, gain);
+  mixR.gain(0, gain);
+  trellis.setPixelColor(BUTTON_VOLUME, trellis.ColorHSV(uint16_t(gain * 65535), 255, 80));
+
+  if (!note || (note == NOTE_CS5)) {
+    if (buttons == 3) {
+      patch = INIT_PATCH;
+    } else if (trellis.justPressed(BUTTON_DOWN)) {
+      patch -= 1;
+    } else if (trellis.justPressed(BUTTON_UP)) {
+      patch += 1;
+    }
+
+    // wrap
+    int bankSize = sizeof(Bank) / sizeof(Bank[0]);
+    patch = (patch + bankSize) % bankSize;
+
+    Patch p = Bank[patch];
+    loadPatch(p);
+
+    oled.clear(PAGE);
+    oled.setFontType(0);
+    oled.setCursor(0, 0);
+    oled.print(p.name);
+    oled.setCursor(0, 10);
+    oled.print("Patch ");
+    oled.print(patch);
+    oled.display();
+  }
+}
 
 bool playing = false;
 
 void loop() {
   uint8_t keys = 0;
   uint8_t note;
-  uint8_t gkeys = 0;
+  uint8_t glissandoKeys = 0;
   uint8_t gnote;
   uint8_t gaffinity = 0;
-  bool knee = true;
   bool bag = false;
   bool silent = false;
+  bool knee = cap.filteredData(KNEE_OFFSET) < CLOSEDVAL;
+  uint8_t buttons = trellis.isPressed(BUTTON_DOWN)?1:0 | trellis.isPressed(BUTTON_UP)?2:0;
 
-  trellisLoop();
+  trellis.tick();
 
-  oled.clear(PAGE);
   for (int i = 0; i < 8; i++) {
     uint16_t val = cap.filteredData(i+KEY_OFFSET);
     uint8_t c = 0;
@@ -214,18 +253,16 @@ void loop() {
         gaffinity = max(gaffinity, aff);
         c = 7 - (7 * aff / (OPENVAL - CLOSEDVAL));
       } else {
-        bitSet(gkeys, i);
+        bitSet(glissandoKeys, i);
       }
     }
     // print key states
-    oled.rectFill(32 - 4*i, 40, 3, c);
-    trellis.setPixelColor(i, 1 << c);
+    trellis.setPixelColor(7 - i, 1 << c);
   }
   
   note = uilleann_matrix[keys];
-  gnote = uilleann_matrix[gkeys];
+  gnote = uilleann_matrix[glissandoKeys];
 
-  knee = cap.filteredData(KNEE_OFFSET) < CLOSEDVAL;
   bool alt = note & 0x80;
   bool galt = gnote & 0x80;
   note = note & 0x7f;
@@ -234,7 +271,6 @@ void loop() {
 
   // All keys closed + knee = no sound
   if (knee) {
-    oled.rectFill(36, 42, 3, 3);
     if (keys == 0xff) {
       silent = true;
     }
@@ -242,15 +278,16 @@ void loop() {
 
   // Jump octave if the bag is squished
   //bag = !digitalRead(BAG);
-  oled.setCursor(9*6, 10);
   if (bag) {
-    oled.print("^");
     if (keys & bit(7)) {
       note += 12;
       gnote += 12;
     }
-  } else {
-    oled.print(" ");
+  }
+
+  // Read some trellis button states
+  if (buttons) {
+    updateTunables(buttons, note);
   }
 
   if (silent) {
@@ -280,11 +317,4 @@ void loop() {
     }
     playing = true;
   }
-  
-  // Print status
-  oled.setCursor(0*6, 20);
-  oled.print(NoteNames[note % 12]);
-  oled.print(alt?".":" ");
-
-  //oled.display();
 }
