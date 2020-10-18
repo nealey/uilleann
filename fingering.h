@@ -52,24 +52,24 @@ uint8_t uilleann_matrix[] = {
   NOTE_CS5, NOTE_CS5|P, NOTE_CS5, NOTE_CS5|P, // OXO OX..
   CCCC, // OXO XO..
   CCCC, // OXO XX..
-  NOTE_C5|P,  NOTE_C5|P,  NOTE_C5|P, NOTE_C5|P, // OXX OO..
-  NOTE_C5,    NOTE_C5,    NOTE_C5,   NOTE_C5,         // OXX OX..
-  NOTE_C5,    NOTE_C5,    NOTE_C5,   NOTE_C5|P,       // OXX XO..
-  NOTE_C5,    NOTE_C5,    NOTE_C5,   NOTE_CS5,        // OXX XX..
-  NOTE_B4,    NOTE_B4,    NOTE_B4,   NOTE_B4,         // XOO OO..
+  NOTE_C5|P,  NOTE_C5|P,  NOTE_C5|P, NOTE_C5|P,   // OXX OO..
+  NOTE_C5,    NOTE_C5,    NOTE_C5,   NOTE_C5,     // OXX OX..
+  NOTE_C5,    NOTE_C5,    NOTE_C5,   NOTE_C5|P,   // OXX XO..
+  NOTE_C5,    NOTE_C5,    NOTE_C5,   NOTE_CS5,    // OXX XX..
+  NOTE_B4,    NOTE_B4,    NOTE_B4,   NOTE_B4,     // XOO OO..
   NOTE_B4|P,  NOTE_B4|P,  NOTE_B4,   NOTE_B4|P,   // XOO OX..
-  NOTE_AS4,   NOTE_B4,    NOTE_AS4,  NOTE_B4,       // XOO XO..
-  NOTE_B4,    NOTE_B4,    NOTE_B4,   NOTE_B4,         // XOO XX..
-  NOTE_B4|P,  NOTE_B4|P,  NOTE_B4|P, NOTE_B4|P, // XOX OO..
-  NOTE_B4|P,  NOTE_B4|P,  NOTE_B4|P, NOTE_B4|P, // XOX OX..
-  NOTE_B4|P,  NOTE_B4|P,  NOTE_B4|P, NOTE_B4|P, // XOX XO..
-  NOTE_B4|P,  NOTE_B4|P,  NOTE_B4|P, NOTE_B4|P, // XOX XX..
-  NOTE_A4,    NOTE_A4,    NOTE_A4|P, NOTE_A4,       // XXO OO..
-  NOTE_A4|P,  NOTE_A4|P,  NOTE_A4|P, NOTE_A4|P, // XXO OX..
-  NOTE_GS4,   NOTE_GS4|P, NOTE_A4,   NOTE_A4, // XXO XO..
-  NOTE_A4|P,  NOTE_A4|P,  NOTE_A4|P, NOTE_A4,   // XXO XX..
-  NOTE_G4,    NOTE_G4,    NOTE_G4|P, NOTE_G4,       // XXX OO..
-  NOTE_G4|P,  NOTE_G4|P,  NOTE_G4|P, NOTE_G4|P, // XXX OX..
-  NOTE_FS4|P, NOTE_FS4|P, NOTE_F4,   NOTE_FS4,  // XXX XO..
-  NOTE_E4,    NOTE_E4|P,  NOTE_DS4,  NOTE_D4,      // XXX XX..
+  NOTE_AS4,   NOTE_B4,    NOTE_AS4,  NOTE_B4,     // XOO XO..
+  NOTE_B4,    NOTE_B4,    NOTE_B4,   NOTE_B4,     // XOO XX..
+  NOTE_B4|P,  NOTE_B4|P,  NOTE_B4|P, NOTE_B4|P,   // XOX OO..
+  NOTE_B4|P,  NOTE_B4|P,  NOTE_B4|P, NOTE_B4|P,   // XOX OX..
+  NOTE_B4|P,  NOTE_B4|P,  NOTE_B4|P, NOTE_B4|P,   // XOX XO..
+  NOTE_B4|P,  NOTE_B4|P,  NOTE_B4|P, NOTE_B4|P,   // XOX XX..
+  NOTE_A4,    NOTE_A4,    NOTE_A4|P, NOTE_A4,     // XXO OO..
+  NOTE_A4|P,  NOTE_A4|P,  NOTE_A4|P, NOTE_A4|P,   // XXO OX..
+  NOTE_GS4,   NOTE_GS4|P, NOTE_A4,   NOTE_A4,     // XXO XO..
+  NOTE_A4|P,  NOTE_A4|P,  NOTE_A4|P, NOTE_A4,     // XXO XX..
+  NOTE_G4,    NOTE_G4,    NOTE_G4|P, NOTE_G4,     // XXX OO..
+  NOTE_G4|P,  NOTE_G4|P,  NOTE_G4|P, NOTE_G4|P,   // XXX OX..
+  NOTE_FS4,   NOTE_FS4,   NOTE_F4,   NOTE_FS4|P,  // XXX XO..
+  NOTE_E4,    NOTE_E4|P,  NOTE_DS4,  NOTE_D4,     // XXX XX..
 };
