@@ -107,9 +107,6 @@ void setup(){
   // initialize tunables
   updateTunables(3, 0);
 
-  // Set up high shelf filter, for vibrato effects
-  biquad1.setHighShelf(0, 1100, 1.0, 1);
-
   // Initialize processor and memory measurements
   AudioProcessorUsageMaxReset();
   AudioMemoryUsageMaxReset();
@@ -142,12 +139,8 @@ void noteOff() {
 
 #define BUTTON_UP 0
 #define BUTTON_DOWN 8
-#define BUTTON_PATCH 12
-#define BUTTON_PITCH 14
-#define BUTTON_VOLUME 15
-
-const uint8_t CLOSEDVAL=0x30;
-const uint8_t OPENVAL=0x70;
+#define BUTTON_PITCH 24
+#define BUTTON_VOLUME 25
 
 #define INIT_PITCH_ADJUST 0
 #define INIT_GAIN 0.1
@@ -223,14 +216,18 @@ void updateTunables(uint8_t buttons, int note) {
   }
 }
 
+const uint8_t CLOSEDVAL = 0x30;
+const uint8_t OPENVAL = 0x70;
+const uint8_t GLISSANDO_STEPS = OPENVAL - CLOSEDVAL;
+
 bool playing = false;
 
 void loop() {
   uint8_t keys = 0;
   uint8_t note;
   uint8_t glissandoKeys = 0;
-  uint8_t gnote;
-  uint8_t gaffinity = 0;
+  uint8_t glissandoNote;
+  float glissandoOpenness = 0;
   bool bag = false;
   bool silent = false;
   bool knee = cap.filteredData(KNEE_OFFSET) < CLOSEDVAL;
@@ -239,35 +236,33 @@ void loop() {
   trellis.tick();
 
   for (int i = 0; i < 8; i++) {
-    uint16_t val = cap.filteredData(i+KEY_OFFSET);
-    uint8_t c = 0;
+    uint16_t val = max(cap.filteredData(i+KEY_OFFSET), CLOSEDVAL);
+    float openness = ((val - CLOSEDVAL) / float(GLISSANDO_STEPS));
 
-    if (val < OPENVAL) {
+    // keys = all keys which are at least touched
+    // glissandoKeys = all keys which are fully closed
+    // The glissando operation computes the difference.
+    if (openness < 1.0) {
+      glissandoOpenness = max(glissandoOpenness, openness);
       bitSet(keys, i);
-      c = 7;
 
-      // If they're just sort of touching it, we're doing a glissando!
-      if (val > CLOSEDVAL) {
-        int aff = val - CLOSEDVAL;
-        
-        gaffinity = max(gaffinity, aff);
-        c = 7 - (7 * aff / (OPENVAL - CLOSEDVAL));
-      } else {
+      if (openness == 0.0) {
         bitSet(glissandoKeys, i);
       }
     }
+    
     // print key states
-    trellis.setPixelColor(7 - i, 1 << c);
+    //trellis.setPixelColor(7 - i, trellis.ColorHSV(65536/12, 255, 120*openness));
+    trellis.setPixelColor(7 - i, trellis.ColorHSV(22222*openness, 255, 40));
   }
   
   note = uilleann_matrix[keys];
-  gnote = uilleann_matrix[glissandoKeys];
+  glissandoNote = uilleann_matrix[glissandoKeys];
 
   bool alt = note & 0x80;
-  bool galt = gnote & 0x80;
+  bool galt = glissandoNote & 0x80;
   note = note & 0x7f;
-  gnote = gnote & 0x7f;
-
+  glissandoNote = glissandoNote & 0x7f;
 
   // All keys closed + knee = no sound
   if (knee) {
@@ -281,7 +276,7 @@ void loop() {
   if (bag) {
     if (keys & bit(7)) {
       note += 12;
-      gnote += 12;
+      glissandoNote += 12;
     }
   }
 
@@ -296,18 +291,18 @@ void loop() {
   } else {
     // Calculate pitch, and glissando pitch
     uint16_t pitch = JustPitches[note];
-    uint16_t gpitch = JustPitches[gnote];
+    uint16_t glissandoPitch = JustPitches[glissandoNote];
 
     if (alt) {
-      biquad1.setHighShelf(0, 1000, 0.5, 1);
+      biquad1.setLowShelf(0, 2000, 0.2, 1);
     } else {
       biquad1.setHighShelf(0, 1000, 1.0, 1);
     }
   
-    // Bend pitch
-    if (gaffinity && (abs(gnote - note) < 3)) {
-      uint32_t sum = (pitch * (OPENVAL-CLOSEDVAL)) + (gpitch * gaffinity);
-      pitch = sum / ((OPENVAL-CLOSEDVAL) + gaffinity);
+    // Bend pitch if fewer than 3 half steps away
+    if (abs(glissandoNote - note) < 3) {
+      float diff = glissandoPitch - pitch;
+      pitch += diff * glissandoOpenness;
     }
 
     if (playing) {
