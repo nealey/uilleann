@@ -2,6 +2,7 @@
 #include <Wire.h>
 #include <Adafruit_NeoTrellisM4.h>
 #include <SFE_MicroOLED.h>
+#include <SparkFun_Qwiic_Button.h>
 #include <Adafruit_MPR121.h>
 #include "synth.h"
 #include "patches.h"
@@ -22,6 +23,7 @@ int currentPatch = 0;
 Adafruit_MPR121 cap = Adafruit_MPR121();
 Adafruit_NeoTrellisM4 trellis = Adafruit_NeoTrellisM4();
 MicroOLED oled(9, 1);
+QwiicButton bag;
 
 // Hat tip to Kyle Gann
 // https://www.kylegann.com/tuning.html
@@ -84,6 +86,9 @@ void setup(){
   // Initialize OLED display
   oled.begin();
   oled.clear(ALL);
+
+  // Initialize bag
+  bag.begin();
 
   // Initialize the Trellis
   trellis.begin();
@@ -228,7 +233,6 @@ void loop() {
   uint8_t glissandoKeys = 0;
   uint8_t glissandoNote;
   float glissandoOpenness = 0;
-  bool bag = false;
   bool silent = false;
   bool knee = cap.filteredData(KNEE_OFFSET) < CLOSEDVAL;
   uint8_t buttons = trellis.isPressed(BUTTON_DOWN)?1:0 | trellis.isPressed(BUTTON_UP)?2:0;
@@ -273,7 +277,7 @@ void loop() {
 
   // Jump octave if the bag is squished
   //bag = !digitalRead(BAG);
-  if (bag) {
+  if (bag.isPressed()) {
     if (keys & bit(7)) {
       note += 12;
       glissandoNote += 12;
