@@ -12,11 +12,47 @@
 #define KNEE_OFFSET 0
 #define KEY_OFFSET 2
 
-float cmaj_low[8] = { 130.81, 146.83, 164.81, 174.61, 196.00, 220.00, 246.94, 261.63 };
-float cmaj_high[8] = { 261.6, 293.7, 329.6, 349.2, 392.0, 440.0, 493.9, 523.3 };
+FMVoice Chanter;
+FMVoice Drones[3];
+FMVoice Regulators[3];
 
-AudioEffectEnvelope *envs[] = {&env1, &env2, &env3, &env4};
-AudioSynthWaveformSineModulated *oscs[] = {&osc1, &osc2, &osc3, &osc4};
+AudioFilterBiquad        biquad1;
+AudioMixer4              mixDrones;
+AudioMixer4              mixRegulators;
+AudioMixer4              mixL;
+AudioMixer4              mixR;
+AudioOutputAnalogStereo  dacs1;
+
+AudioConnection FMVoicePatchCords[] = {
+  {Chanter.outputMixer, 0, biquad1, 0},
+  {biquad1, 0, mixL, 0},
+  {biquad1, 0, mixR, 0},
+
+  {Drones[0].outputMixer, 0, mixDrones, 0},
+  {Drones[1].outputMixer, 0, mixDrones, 1},
+  {Drones[2].outputMixer, 0, mixDrones, 2},
+  {mixDrones, 0, mixL, 1},
+  {mixDrones, 0, mixR, 1},
+
+  {Regulators[0].outputMixer, 0, mixRegulators, 0},
+  {Regulators[1].outputMixer, 0, mixRegulators, 1},
+  {Regulators[2].outputMixer, 0, mixRegulators, 2},
+  {mixRegulators, 0, mixL, 2},
+  {mixRegulators, 0, mixR, 2},
+
+  {mixL, 0, dacs1, 0},
+  {mixR, 0, dacs1, 1},
+
+  FMVoiceWiring(Chanter),
+  FMVoiceWiring(Drones[0]),
+  FMVoiceWiring(Drones[1]),
+  FMVoiceWiring(Drones[2]),
+  FMVoiceWiring(Drones[3]),
+  FMVoiceWiring(Regulators[0]),
+  FMVoiceWiring(Regulators[1]),
+  FMVoiceWiring(Regulators[2]),
+  FMVoiceWiring(Regulators[3]),
+};
 
 int currentPatch = 0;
 
@@ -25,57 +61,8 @@ Adafruit_NeoTrellisM4 trellis = Adafruit_NeoTrellisM4();
 MicroOLED oled(9, 1);
 QwiicButton bag;
 
-// Hat tip to Kyle Gann
-// https://www.kylegann.com/tuning.html
-float JustPitches[MaxNote + 1];
-void setupJustPitches(uint8_t baseNote, float basePitch) {
-  JustPitches[baseNote +  0] = basePitch *  1 /  1;
-  JustPitches[baseNote +  1] = basePitch * 16 / 15;
-  JustPitches[baseNote +  2] = basePitch *  9 /  8;
-  JustPitches[baseNote +  3] = basePitch *  6 /  5;
-  JustPitches[baseNote +  4] = basePitch *  5 /  4;
-  JustPitches[baseNote +  5] = basePitch *  4 /  3;
-  JustPitches[baseNote +  6] = basePitch * 45 / 32;
-  JustPitches[baseNote +  7] = basePitch *  3 /  2;
-  JustPitches[baseNote +  8] = basePitch *  8 /  5;
-  JustPitches[baseNote +  9] = basePitch *  5 /  3;
-  JustPitches[baseNote + 10] = basePitch *  9 /  5;
-  JustPitches[baseNote + 11] = basePitch * 15 /  8;
 
-  // Octaves
-  for (int note = baseNote; note < baseNote + 12; note++) {
-    for (int i = 1; i < 9; i++) {
-      int multiplier = 1<<i;
-      int shift = i*12;
-      int upNote = note + shift;
-      int dnNote = note - shift;
-      
-      if (upNote <= MaxNote) {
-        JustPitches[upNote] = JustPitches[note] * multiplier;
-      }
-      if (dnNote >= 0) {
-        JustPitches[dnNote] = JustPitches[note] / multiplier;
-      }
-    }
-  }
-}
-
-void loadPatch(Patch p) {
-  for (int i=0; i<4; i++) {
-    Operator op = p.operators[i];
-
-    oscs[i]->amplitude(op.gain);
-    envs[i]->delay(op.delay);
-    envs[i]->attack(op.attack);
-    envs[i]->hold(op.hold);
-    envs[i]->decay(op.decay);
-    envs[i]->sustain(op.sustain);
-    envs[i]->release(op.release);
-  }
-  feedback.gain(0, p.feedback);
-}
-
-void setup(){
+void setup() {
   setupJustPitches(NOTE_D4, PITCH_D4);
   pinMode(LED_BUILTIN, OUTPUT);
 
@@ -115,31 +102,6 @@ void setup(){
   // Initialize processor and memory measurements
   AudioProcessorUsageMaxReset();
   AudioMemoryUsageMaxReset();
-}
-
-void setPitch(float freq) {
-  for (int i=0; i<4; i++) {
-    Operator op = Bank[currentPatch].operators[i];
-    oscs[i]->frequency(op.baseFrequency + freq*op.multiplier);
-  }
-}
-
-void noteOn(float freq) {
-  AudioNoInterrupts();
-  for (int i=0; i<4; i++) {
-    Operator op = Bank[currentPatch].operators[i];
-    oscs[i]->frequency(op.baseFrequency + freq*op.multiplier);
-    envs[i]->noteOn();
-  }
-  AudioInterrupts();
-}
-
-void noteOff() {
-  AudioNoInterrupts();
-  for (int i=0; i<4; i++) {
-    envs[i]->noteOff();
-  }
-  AudioInterrupts();
 }
 
 #define BUTTON_UP 0
@@ -207,13 +169,13 @@ void updateTunables(uint8_t buttons, int note) {
     int bankSize = sizeof(Bank) / sizeof(Bank[0]);
     patch = (patch + bankSize) % bankSize;
 
-    Patch p = Bank[patch];
-    loadPatch(p);
+    FMPatch *p = &Bank[patch];
+    FMVoiceLoadPatch(&Chanter, p);
 
     oled.clear(PAGE);
     oled.setFontType(0);
     oled.setCursor(0, 0);
-    oled.print(p.name);
+    oled.print(p->name);
     oled.setCursor(0, 10);
     oled.print("Patch ");
     oled.print(patch);
@@ -290,7 +252,7 @@ void loop() {
   }
 
   if (silent) {
-    noteOff();
+    FMVoiceNoteOff(&Chanter);
     playing = false;
   } else {
     // Calculate pitch, and glissando pitch
@@ -310,9 +272,9 @@ void loop() {
     }
 
     if (playing) {
-      setPitch(pitch);
+      FMVoiceSetPitch(&Chanter, pitch);
     } else {
-      noteOn(pitch);
+      FMVoiceNoteOn(&Chanter, pitch);
     }
     playing = true;
   }

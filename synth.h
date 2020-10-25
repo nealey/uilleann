@@ -1,38 +1,135 @@
+#pragma once
 #include <Audio.h>
 #include <Wire.h>
 #include <SPI.h>
 #include <SD.h>
 
-// GUItool: begin automatically generated code
-AudioMixer4              feedback;         //xy=110,37
-AudioSynthWaveformSineModulated osc4;           //xy=112,98
-AudioSynthWaveformSineModulated osc2;           //xy=112,194
-AudioSynthWaveformSineModulated osc1;           //xy=112,245
-AudioSynthWaveformSineModulated osc3;           //xy=113,146
-AudioMixer4              mixOp;          //xy=114,418
-AudioEffectEnvelope      env4;           //xy=251,97
-AudioEffectEnvelope      env3;           //xy=251,146
-AudioEffectEnvelope      env2;           //xy=252,194
-AudioEffectEnvelope      env1;           //xy=252,245
-AudioFilterBiquad        biquad1;        //xy=257,418
-AudioMixer4              mixL;           //xy=472,402
-AudioMixer4              mixR;           //xy=473,498
-AudioOutputAnalogStereo  dacs1;          //xy=724,452
-AudioConnection          patchCord1(feedback, osc4);
-AudioConnection          patchCord2(osc4, env4);
-AudioConnection          patchCord3(osc4, 0, feedback, 0);
-AudioConnection          patchCord4(osc2, env2);
-AudioConnection          patchCord5(osc1, env1);
-AudioConnection          patchCord6(osc3, env3);
-AudioConnection          patchCord7(mixOp, biquad1);
-AudioConnection          patchCord8(env4, osc3);
-AudioConnection          patchCord9(env4, 0, mixOp, 3);
-AudioConnection          patchCord10(env3, 0, mixOp, 2);
-AudioConnection          patchCord11(env2, osc1);
-AudioConnection          patchCord12(env2, 0, mixOp, 1);
-AudioConnection          patchCord13(env1, 0, mixOp, 0);
-AudioConnection          patchCord14(biquad1, 0, mixL, 0);
-AudioConnection          patchCord15(biquad1, 0, mixR, 0);
-AudioConnection          patchCord17(mixL, 0, dacs1, 0);
-AudioConnection          patchCord18(mixR, 0, dacs1, 1);
-// GUItool: end automatically generated code
+#define NUM_OPERATORS 4
+
+/** FMOperator defines all settable paramaters to an operator.
+ *
+ * An FM operator consists of:
+ * - An input
+ * - An oscillator
+ * - An envelope generator
+ *
+ * Frequency Modulation happens by chaining oscillators together,
+ * using the output of one to modulate the frequency of the next.
+ *
+ * Oscillators generate waveforms in a shape defined by
+ * `synth_waveform.h`. WAVEFORM_SINE is a good one to start with.
+ * Other sensible options are SAWTOOTH, SQUARE, and TRIANGLE.
+ *
+ * Frequency for an oscillator is calculated with:
+ *     offset + (voiceFrequency × multiplier)
+ *
+ * Oscillator frequency is then modulated by the level obtained
+ * by the input mixer: level of 1.0 shifts frequency up by
+ * 8 octaves, level of -1.0 shifts frequency down by 8 octaves.
+ *
+ * The envelope modifies amplitude of the oscillator output,
+ * using the following rules:
+ * - stay at 0 until Note On
+ * - stay at 0 for `delayTime` milliseconds
+ * - linear increase to `holdAmplitude` for `attackTime` milliseconds
+ * - stay at `holdAmplitude` for `holdTime` milliseconds
+ * - linear decrease to `sustainAmplitude` for `decayTime` milliseconds
+ * - stay at `sustainAmplitude` until Note Off
+ * - linear decrease to 0 for `releaseTime` milliseconds
+ */
+typedef struct FMOperator {
+  // Oscillator
+  short waveform;
+  float offset;
+  float multiplier;
+
+  // Envelope
+  float delayTime;
+  float attackTime;
+  float holdAmplitude;
+  float holdTime;
+  float decayTime;
+  float sustainAmplitude;
+  float releaseTime;
+} FMOperator;
+
+/** FMPatch defines all parameters to a voice patch.
+ *
+ * This defines the "sound" of an FM voice,
+ * just like a "Patch" does in a hardware synthesizer.
+ * I think of a "patch" being the physical cables that
+ * connect oscillators together, and to the output mixer.
+ *
+ * Each operator has NUM_OPERATORS input gains,
+ * one output gain (to the voice output mixer),
+ * and NUM_OPERATORS operators.
+ *
+ * Historical FM synthisizers,
+ * such as the DX7 or DX9,
+ * used "algorithms" to patch operators into one another:
+ * this is done with 0.0 or 1.0 values to the gains.
+ * The "feedback" on operator 4 of the DX9
+ * can be accomplished by patching an operator into itself.
+ */
+typedef struct FMPatch {
+  char *name;
+  float gains[NUM_OPERATORS][NUM_OPERATORS+1];
+  FMOperator operators[NUM_OPERATORS];
+} FMPatch;
+
+/** FMVoice sets up all the Audio objects for a voice.
+ */
+typedef struct FMVoice {
+  AudioMixer4 mixers[NUM_OPERATORS];
+  AudioSynthWaveformModulated oscillators[NUM_OPERATORS];
+  AudioEffectEnvelope envelopes[NUM_OPERATORS];
+  AudioMixer4 outputMixer;
+  FMPatch *patch;
+} FMVoice;
+
+/** FMOperatorWiring outputs AudioConnection initializers to wire one FM Operator
+ */
+#define FMOperatorWiring(name, i) \
+  {name.mixers[i], 0, name.oscillators[i], 0}, \
+  {name.oscillators[i], 0, name.envelopes[i], 0}, \
+  {name.envelopes[i], 0, name.outputMixer, i}, \
+  {name.envelopes[i], 0, name.mixers[0], i}, \
+  {name.envelopes[i], 0, name.mixers[1], i}, \
+  {name.envelopes[i], 0, name.mixers[2], i}, \
+  {name.envelopes[i], 0, name.mixers[3], i}
+
+/** FMVoiceWiring outputs AudioConnection initializer to wire one FMVoice
+ */
+#define FMVoiceWiring(name) \
+  FMOperatorWiring(name, 0), \
+  FMOperatorWiring(name, 1), \
+  FMOperatorWiring(name, 2), \
+  FMOperatorWiring(name, 3)
+
+/** FMVoiceLoadPatch loads a patch into a voice.
+ */
+void FMVoiceLoadPatch(FMVoice *v, FMPatch *p);
+
+/** FMVoiceSetPitch sets the pitch (Hz) of a voice.
+ *
+ * This does not signal the envelope in any way.
+ * You would use this for a glissando, portamento, or pitch bend.
+ * In my bagpipe, this prevents "reed noise" when changing notes.
+ */
+void FMVoiceSetPitch(FMVoice *v, float pitch);
+
+/** FMVoiceNoteOn sets the pitch (Hz) of a voice, and starts in playing.
+ *
+ * This tells the envelope generators to begin.
+ * On a piano, this is what you would use when a key is pressed.
+ * In my bagpipe, this triggers "reed noise".
+ */
+void FMVoiceNoteOn(FMVoice *v, float pitch);
+
+/** FMVoiceNoteOff stops a note from playing.
+ *
+ * This turns the voice "off" by shutting down all the envelope generators.
+ * On a piano, this is what you would use when a key is released.
+ * In my bagpipe, this corresponds to all holes being closed.
+ */
+void FMVoiceNoteOff(FMVoice *v);

@@ -1,3 +1,7 @@
+#pragma once
+
+#define PITCH_D4 293.66
+
 enum Notes {
   NOTE_C0, NOTE_CS0, NOTE_D0, NOTE_DS0, NOTE_E0, NOTE_F0, NOTE_FS0, NOTE_G0, NOTE_GS0, NOTE_A0, NOTE_AS0, NOTE_B0,
   NOTE_C1, NOTE_CS1, NOTE_D1, NOTE_DS1, NOTE_E1, NOTE_F1, NOTE_FS1, NOTE_G1, NOTE_GS1, NOTE_A1, NOTE_AS1, NOTE_B1,
@@ -11,8 +15,7 @@ enum Notes {
 };
 const uint8_t MaxNote = NOTE_B8;
 
-const char *NoteNames[] {
-  "C ", "C#", "D ", "Eb", "E ", "F ", "F#", "G ", "Ab", "A ", "Bb", "B ",
-};
+extern const char *NoteNames[];
+extern float JustPitches[MaxNote + 1];
 
-#define PITCH_D4 293.66
+void setupJustPitches(uint8_t baseNote, float basePitch);

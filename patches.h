@@ -1,50 +1,39 @@
-typedef struct Operator {
-  float gain;
-  float delay;
-  float attack;
-  float hold;
-  float decay;
-  float sustain;
-  float release;
-  float baseFrequency;
-  float multiplier;
-} Operator;
+// "Factory" patches
 
-typedef struct Patch {
-  char *name;
-  Operator operators[4];
-  float feedback;
-} Patch;
+#pragma once
+#include "dx9.h"
 
-Patch Bank[] = {
+// Waveform, offset, multiplier, delay, attack, holdAmp, hold, decay, sustainAmp, release
+FMPatch Bank[] = {
   {
     "Venus Oboe",
+    DX9_ALG_5(0),
     {
-      {1.0,  0, 10.5,  0, 5000, 0.75,  5.0,  0,  1.00},
-      {1.0,  0, 10.5,  0, 2000, 0.80,  5.0,  0,  4.00},
-      {0.0,  0, 10.5,  0, 2000, 0.50,  5.0,  0,  8.00},
-      {0.0,  0, 50.0,  0,  800, 0.75,  5.0,  0, 16.00},
+      // Waveform    off   mult  del   att  hldA   hld  dec  susA  rel
+      {WAVEFORM_SINE,  0,  1.00,   0, 10.5,  1.0, 10.5,   0, 0.75,   5},
+      {WAVEFORM_SINE,  0,  4.00,   0, 10.5,  1.0, 10.5,   0, 0.80,   5},
+      {WAVEFORM_SINE,  0,  8.00,   0, 10.5,  1.0, 10.5,   0, 0.50,   5},
+      {WAVEFORM_SINE,  0, 16.00,   0, 10.5,  1.0, 50.0,   0, 0.75,   5},
     },
-    0.0,
   },
   {
     "IWantPizza",
+    DX9_ALG_1(0),
     {
-      {1.0,  0, 10.5,  0, 5000, 0.35,  100, 0,  4.00},
-      {1.0,  0, 10.5,  0, 2000, 0.30,  100, 0,  1.00},
-      {1.0,  0, 10.5,  0, 2000, 0.50,  100, 0,  8.00},
-      {1.0,  0,  200,  0,  800, 0.25,  100, 0, 16.00},
+      {WAVEFORM_SINE,  0,  4.00,   0, 10.5,  1.0, 10.5,   0, 0.35,  20},
+      {WAVEFORM_SINE,  0,  1.00,   0, 10.5,  1.0, 10.5,   0, 0.30,  20},
+      {WAVEFORM_SINE,  0,  8.00,   0, 10.5,  1.0, 10.5,   0, 0.50,  20},
+      {WAVEFORM_SINE,  0, 16.00,   0, 10.5,  1.0,   50,   0, 0.25,  20},
     },
-    0.0,
   },
   {
     "Ray Gun",
+    DX9_ALG_1(0),
     {
-      {1.0,  0, 10.5,  0, 5000, 0.35, 2000,  0, 1.00},
-      {1.0,  0, 10.5,  0, 2000, 0.30, 2000,  0, 1.00},
-      {1.0,  0, 10.5,  0, 2000, 0.00, 2000,  0, 9.00},
-      {1.0,  0,  200,  0,  800, 0.25,  800,  0, 1.00},  
+      {WAVEFORM_SINE,  0,  1.00,   0, 10.5,  1.0, 10.5,   0, 0.35,  20},
+      {WAVEFORM_SINE,  0,  1.00,   0, 10.5,  1.0, 10.5,   0, 0.30,  20},
+      {WAVEFORM_SINE,  0,  9.00,   0, 10.5,  1.0, 10.5,   0, 0.00,  20},
+      {WAVEFORM_SINE,  0,  1.00,   0, 10.5,  1.0,   50,   0, 0.25,   8},
     },
-    0.0,
   },
 };
