@@ -3,6 +3,7 @@
 #include <Wire.h>
 #include <SPI.h>
 #include <SD.h>
+#include "synth_waveform.h"
 
 #define NUM_OPERATORS 4
 

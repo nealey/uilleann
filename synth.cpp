@@ -1,4 +1,5 @@
 #include "synth.h"
+#include "synth_waveform.h"
 
 void FMVoiceLoadPatch(FMVoice *v, FMPatch *p) {
   for (int i=0; i<NUM_OPERATORS; i++) {
