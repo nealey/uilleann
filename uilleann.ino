@@ -9,6 +9,7 @@
 #include "notes.h"
 #include "fingering.h"
 
+#define DEBUG
 #define KNEE_OFFSET 0
 #define KEY_OFFSET 2
 
@@ -23,7 +24,16 @@ AudioMixer4              mixL;
 AudioMixer4              mixR;
 AudioOutputAnalogStereo  dacs1;
 
+#ifdef DEBUG
+AudioSynthNoiseWhite debug;
+#endif
+
 AudioConnection FMVoicePatchCords[] = {
+#ifdef DEBUG
+  {debug, 0, mixL, 3},
+  {debug, 0, mixR, 3},
+#endif
+
   {Chanter.outputMixer, 0, biquad1, 0},
   {biquad1, 0, mixL, 0},
   {biquad1, 0, mixR, 0},
@@ -60,7 +70,6 @@ Adafruit_MPR121 cap = Adafruit_MPR121();
 Adafruit_NeoTrellisM4 trellis = Adafruit_NeoTrellisM4();
 MicroOLED oled(9, 1);
 QwiicButton bag;
-
 
 void setup() {
   setupJustPitches(NOTE_D4, PITCH_D4);
@@ -102,6 +111,12 @@ void setup() {
   // Initialize processor and memory measurements
   AudioProcessorUsageMaxReset();
   AudioMemoryUsageMaxReset();
+
+#ifdef DEBUG
+  debug.amplitude(0.1);
+  mixL.gain(3, 0.1);
+  mixR.gain(3, 0.1);
+#endif
 }
 
 #define BUTTON_UP 0
@@ -152,8 +167,10 @@ void updateTunables(uint8_t buttons, int note) {
     }
   }
 
-  mixL.gain(0, gain);
-  mixR.gain(0, gain);
+  for (int i=0; i<3; i++) {
+    mixL.gain(i, gain);
+    mixR.gain(i, gain);
+  }
   trellis.setPixelColor(BUTTON_VOLUME, trellis.ColorHSV(uint16_t(gain * 65535), 255, 80));
 
   if (!note || (note == NOTE_CS5)) {

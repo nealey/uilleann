@@ -19,11 +19,8 @@ void setupJustPitches(uint8_t baseNote, float basePitch) {
   JustPitches[baseNote +  7] = basePitch *  3 /  2; // A
   JustPitches[baseNote +  8] = basePitch *  8 /  5; // Bb
   JustPitches[baseNote +  9] = basePitch *  5 /  3; // B
-  JustPitches[baseNote + 10] = basePitch *  9 /  5; // C
+  JustPitches[baseNote + 10] = basePitch * 16 /  9; // C (fourth up from G)
   JustPitches[baseNote + 11] = basePitch * 15 /  8; // C#
-
-  // Two fourths up from the base pitch, so G major scale sounds right
-  JustPitches[baseNote + 11] = basePitch *  8 /  3; // C#
 
   // Octaves
   for (int note = baseNote; note < baseNote + 12; note++) {

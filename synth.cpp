@@ -20,6 +20,7 @@ void FMVoiceLoadPatch(FMVoice *v, FMPatch *p) {
     }
     v->outputMixer.gain(i, p->gains[i][NUM_OPERATORS]);
   }
+  v->patch = p;
 }
 
 void FMVoiceSetPitch(FMVoice *v, float freq) {

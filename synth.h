@@ -93,11 +93,11 @@ typedef struct FMVoice {
 #define FMOperatorWiring(name, i) \
   {name.mixers[i], 0, name.oscillators[i], 0}, \
   {name.oscillators[i], 0, name.envelopes[i], 0}, \
-  {name.envelopes[i], 0, name.outputMixer, i}, \
   {name.envelopes[i], 0, name.mixers[0], i}, \
   {name.envelopes[i], 0, name.mixers[1], i}, \
   {name.envelopes[i], 0, name.mixers[2], i}, \
-  {name.envelopes[i], 0, name.mixers[3], i}
+  {name.envelopes[i], 0, name.mixers[3], i}, \
+  {name.envelopes[i], 0, name.outputMixer, i}
 
 /** FMVoiceWiring outputs AudioConnection initializer to wire one FMVoice
  */

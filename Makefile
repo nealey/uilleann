@@ -1,6 +1,9 @@
 FQBN = adafruit:samd:adafruit_trellis_m4
+UF2_MOUNT = /mnt/chromeos/removable/TRELM4BOOT
 
 default: build/uilleann.ino.uf2
+install: build/uilleann.ino.uf2
+	./install.sh $< $(UF2_MOUNT)
 
 # uf2conv.py is covered by an MIT license.
 build/uf2conv.py:
