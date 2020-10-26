@@ -9,7 +9,7 @@
 #include "notes.h"
 #include "fingering.h"
 
-#define DEBUG
+//#define DEBUG
 #define KNEE_OFFSET 0
 #define KEY_OFFSET 2
 
@@ -24,15 +24,14 @@ AudioMixer4              mixL;
 AudioMixer4              mixR;
 AudioOutputAnalogStereo  dacs1;
 
-#ifdef DEBUG
 AudioSynthNoiseWhite debug;
-#endif
 
 AudioConnection FMVoicePatchCords[] = {
-#ifdef DEBUG
+  {debug, 0, mixR, 3}, // Don't know why, but the first one is ignored
   {debug, 0, mixL, 3},
-  {debug, 0, mixR, 3},
-#endif
+
+  {mixL, 0, dacs1, 0},
+  {mixR, 0, dacs1, 1},
 
   {Chanter.outputMixer, 0, biquad1, 0},
   {biquad1, 0, mixL, 0},
@@ -49,9 +48,6 @@ AudioConnection FMVoicePatchCords[] = {
   {Regulators[2].outputMixer, 0, mixRegulators, 2},
   {mixRegulators, 0, mixL, 2},
   {mixRegulators, 0, mixR, 2},
-
-  {mixL, 0, dacs1, 0},
-  {mixR, 0, dacs1, 1},
 
   FMVoiceWiring(Chanter),
   FMVoiceWiring(Drones[0]),
@@ -114,8 +110,9 @@ void setup() {
 
   // Turn on drones
   for (int i=0; i<3; i++) {
+    float detune = (1-i) * 0.002;
     FMVoiceLoadPatch(&Drones[i], &Bank[0]);
-    FMVoiceNoteOn(&Drones[i], JustPitches[NOTE_D4 - 12*i] + i);
+    FMVoiceNoteOn(&Drones[i], JustPitches[NOTE_D4 - 12*i] * (1 + detune));
   }
 
   // Turn on all mixer channels
@@ -124,11 +121,9 @@ void setup() {
     mixR.gain(i, 0.6);
   }
   
-#ifdef DEBUG
   debug.amplitude(0.1);
-  mixL.gain(3, 0.1);
-  mixR.gain(3, 0.1);
-#endif
+  mixL.gain(3, 0);
+  mixR.gain(3, 0);
 }
 
 #define BUTTON_UP 0
