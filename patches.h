@@ -6,6 +6,23 @@
 // Waveform, offset, multiplier, delay, attack, holdAmp, hold, decay, sustainAmp, release
 FMPatch Bank[] = {
   {
+    "Pumpkin",
+    ALG_OPL2_1(0.3),
+    {
+      // Waveform       offs   mult dely  attk  hldA   hld decy  susA rels
+      {WAVEFORM_SAWTOOTH,  0,  1.00,   0, 10.5,  0.8, 10.5,  10, 0.50,   5},
+      {WAVEFORM_SINE,      0,  2.00,   0, 10.5,  0.4, 10.5,  10, 0.01,   5},
+    },
+  },
+  {
+    "Sawtooth",
+    ALG_SIMPLE,
+    {
+      // Waveform     offs   mult dely  attk  hldA   hld decy  susA rels
+      {WAVEFORM_SAWTOOTH,  0,  1.00,   0, 10.5,  0.8, 10.5,  10, 0.50,   5},
+    },
+  },
+  {
     "Square",
     ALG_SIMPLE,
     {

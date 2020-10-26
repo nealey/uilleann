@@ -5,6 +5,7 @@ void FMVoiceLoadPatch(FMVoice *v, FMPatch *p) {
   for (int i=0; i<NUM_OPERATORS; i++) {
     FMOperator op = p->operators[i];
 
+    v->oscillators[i].frequencyModulation(1);
     v->oscillators[i].begin(op.waveform);
     v->envelopes[i].delay(op.delayTime);
     v->envelopes[i].attack(op.attackTime);
@@ -35,10 +36,12 @@ void FMVoiceNoteOn(FMVoice *v, float freq) {
   for (int i=0; i<4; i++) {
     v->envelopes[i].noteOn();
   }
+  v->playing = true;
 }
 
 void FMVoiceNoteOff(FMVoice *v) {
   for (int i=0; i<4; i++) {
     v->envelopes[i].noteOff();
   }
+  v->playing = false;
 }

@@ -86,6 +86,7 @@ typedef struct FMVoice {
   AudioEffectEnvelope envelopes[NUM_OPERATORS];
   AudioMixer4 outputMixer;
   FMPatch *patch;
+  bool playing;
 } FMVoice;
 
 /** FMOperatorWiring outputs AudioConnection initializers to wire one FM Operator

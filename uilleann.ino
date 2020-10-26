@@ -112,6 +112,18 @@ void setup() {
   AudioProcessorUsageMaxReset();
   AudioMemoryUsageMaxReset();
 
+  // Turn on drones
+  for (int i=0; i<3; i++) {
+    FMVoiceLoadPatch(&Drones[i], &Bank[0]);
+    FMVoiceNoteOn(&Drones[i], JustPitches[NOTE_D4 - 12*i] + i);
+  }
+
+  // Turn on all mixer channels
+  for (int i=0; i<4; i++) {
+    mixL.gain(i, 0.5);
+    mixR.gain(i, 0.6);
+  }
+  
 #ifdef DEBUG
   debug.amplitude(0.1);
   mixL.gain(3, 0.1);
@@ -125,11 +137,11 @@ void setup() {
 #define BUTTON_VOLUME 25
 
 #define INIT_PITCH_ADJUST 0
-#define INIT_GAIN 0.1
+#define INIT_GAIN 0.7
 #define INIT_PATCH 0
 
 int16_t pitchAdjust;
-float gain;
+float chanterGain;
 int patch;
 
 void updateTunables(uint8_t buttons, int note) {
@@ -156,22 +168,22 @@ void updateTunables(uint8_t buttons, int note) {
     // Volume adjust if playing G
     switch (buttons) {
     case 3:
-      gain = INIT_GAIN;
+      chanterGain = INIT_GAIN;
       break;
     case 2:
-      gain = min(gain+0.005, 1.0);
+      chanterGain = min(chanterGain+0.005, 1.0);
       break;
     case 1:
-      gain = max(gain-0.005, 0.0);
+      chanterGain = max(chanterGain-0.005, 0.0);
       break;
     }
   }
 
   for (int i=0; i<3; i++) {
-    mixL.gain(i, gain);
-    mixR.gain(i, gain);
+    mixL.gain(i, chanterGain);
+    mixR.gain(i, chanterGain);
   }
-  trellis.setPixelColor(BUTTON_VOLUME, trellis.ColorHSV(uint16_t(gain * 65535), 255, 80));
+  trellis.setPixelColor(BUTTON_VOLUME, trellis.ColorHSV(uint16_t(chanterGain * 65535), 255, 80));
 
   if (!note || (note == NOTE_CS5)) {
     if (buttons == 3) {
@@ -270,7 +282,6 @@ void loop() {
 
   if (silent) {
     FMVoiceNoteOff(&Chanter);
-    playing = false;
   } else {
     // Calculate pitch, and glissando pitch
     uint16_t pitch = JustPitches[note];
@@ -288,11 +299,10 @@ void loop() {
       pitch += diff * glissandoOpenness;
     }
 
-    if (playing) {
+    if (Chanter.playing) {
       FMVoiceSetPitch(&Chanter, pitch);
     } else {
       FMVoiceNoteOn(&Chanter, pitch);
     }
-    playing = true;
   }
 }
