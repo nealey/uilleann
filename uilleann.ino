@@ -1,38 +1,37 @@
 #include <Audio.h>
 #include <Wire.h>
-#include <Adafruit_NeoTrellisM4.h>
-#include <SFE_MicroOLED.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 #include <SparkFun_Qwiic_Button.h>
 #include <Adafruit_MPR121.h>
+#include <paj7620.h>
 #include "synth.h"
 #include "patches.h"
 #include "notes.h"
 #include "fingering.h"
 
+#define DRONES
 #define DEBUG
-#define KNEE_OFFSET 0
 #define KEY_OFFSET 2
 
 FMVoice Chanter;
 FMVoice Drones[3];
 FMVoice Regulators[3];
 
-AudioFilterBiquad        biquad1;
-AudioMixer4              mixDrones;
-AudioMixer4              mixRegulators;
-AudioMixer4              mixL;
-AudioMixer4              mixR;
-AudioOutputAnalogStereo  dacs1;
-
-#ifdef DEBUG
-AudioSynthNoiseWhite debug;
-#endif
+AudioFilterBiquad    biquad1;
+AudioMixer4          mixDrones;
+AudioMixer4          mixRegulators;
+AudioMixer4          mixL;
+AudioMixer4          mixR;
+AudioOutputI2S       out1;
+AudioSynthNoiseWhite noise;
 
 AudioConnection FMVoicePatchCords[] = {
-#ifdef DEBUG
-  {debug, 0, mixL, 3},
-  {debug, 0, mixR, 3},
-#endif
+  //{0, 0, 0, 0}, // For some reason, the first one is ignored
+
+  {noise, 0, mixDrones, 3},
+  {noise, 0, mixL, 3},
+  {noise, 0, mixR, 3},
 
   {Chanter.outputMixer, 0, biquad1, 0},
   {biquad1, 0, mixL, 0},
@@ -50,56 +49,71 @@ AudioConnection FMVoicePatchCords[] = {
   {mixRegulators, 0, mixL, 2},
   {mixRegulators, 0, mixR, 2},
 
-  {mixL, 0, dacs1, 0},
-  {mixR, 0, dacs1, 1},
+  {mixL, 0, out1, 0},
+  {mixR, 0, out1, 1},
 
   FMVoiceWiring(Chanter),
   FMVoiceWiring(Drones[0]),
   FMVoiceWiring(Drones[1]),
   FMVoiceWiring(Drones[2]),
-  FMVoiceWiring(Drones[3]),
   FMVoiceWiring(Regulators[0]),
   FMVoiceWiring(Regulators[1]),
   FMVoiceWiring(Regulators[2]),
-  FMVoiceWiring(Regulators[3]),
 };
 
 int currentPatch = 0;
 
 Adafruit_MPR121 cap = Adafruit_MPR121();
-Adafruit_NeoTrellisM4 trellis = Adafruit_NeoTrellisM4();
-MicroOLED oled(9, 1);
+Adafruit_SSD1306 display(128, 32, &Wire, -1);
 QwiicButton bag;
+bool use_bag;
+
+void blink(bool forever) {
+  for (;;) {
+    digitalWrite(LED_BUILTIN, true);
+    delay(200);
+    digitalWrite(LED_BUILTIN, false);
+    delay(200);
+    if (! forever) break;
+  }
+}
 
 void setup() {
-  setupJustPitches(NOTE_D4, PITCH_D4);
   pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, true);
+
+  setupJustPitches(NOTE_D4, PITCH_D4);
 
   // Wire.begin needs a moment
   delay(100);
   Wire.begin();
 
-  // Initialize OLED display
-  oled.begin();
-  oled.clear(ALL);
+  // Initialize gesture/proximity sensor
+  if (paj7620Init()) {
+    // XXX: Error handling
+  }
+
+  // Initialize display display
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3c)) {
+    blink(true);
+  }
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.print("Starting");
+  display.display();
 
   // Initialize bag
   bag.begin();
-
-  // Initialize the Trellis
-  trellis.begin();
+  use_bag = bag.isConnected();
 
   // Initialize touch sensor
-  bool blink = true;
   while (!cap.begin(0x5A)) {
-    oled.clear(PAGE);
-    oled.setCursor(0, 0);
-    oled.print("No Pipe?");
-    oled.display();
-
-    trellis.setPixelColor(0, blink?0xff6666:0);
-    blink = !blink;
-    delay(200);
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.print("Pipe?");
+    display.display();
+    blink(false);
   }
 
   // Set aside some memory for the audio library  
@@ -125,16 +139,11 @@ void setup() {
   }
   
 #ifdef DEBUG
-  debug.amplitude(0.1);
+  noise.amplitude(0.1);
   mixL.gain(3, 0.1);
   mixR.gain(3, 0.1);
 #endif
 }
-
-#define BUTTON_UP 0
-#define BUTTON_DOWN 8
-#define BUTTON_PITCH 24
-#define BUTTON_VOLUME 25
 
 #define INIT_PITCH_ADJUST 0
 #define INIT_GAIN 0.7
@@ -162,7 +171,6 @@ void updateTunables(uint8_t buttons, int note) {
 
   float adj = pow(2, pitchAdjust / 32768.0);
   setupJustPitches(NOTE_D4, PITCH_D4*adj);
-  trellis.setPixelColor(BUTTON_PITCH, trellis.ColorHSV(uint16_t(pitchAdjust), 255, 80));
 
   if (!note || (note == NOTE_G4)) {
     // Volume adjust if playing G
@@ -178,20 +186,14 @@ void updateTunables(uint8_t buttons, int note) {
       break;
     }
   }
-
   for (int i=0; i<3; i++) {
     mixL.gain(i, chanterGain);
     mixR.gain(i, chanterGain);
   }
-  trellis.setPixelColor(BUTTON_VOLUME, trellis.ColorHSV(uint16_t(chanterGain * 65535), 255, 80));
 
   if (!note || (note == NOTE_CS5)) {
     if (buttons == 3) {
       patch = INIT_PATCH;
-    } else if (trellis.justPressed(BUTTON_DOWN)) {
-      patch -= 1;
-    } else if (trellis.justPressed(BUTTON_UP)) {
-      patch += 1;
     }
 
     // wrap
@@ -201,14 +203,13 @@ void updateTunables(uint8_t buttons, int note) {
     FMPatch *p = &Bank[patch];
     FMVoiceLoadPatch(&Chanter, p);
 
-    oled.clear(PAGE);
-    oled.setFontType(0);
-    oled.setCursor(0, 0);
-    oled.print(p->name);
-    oled.setCursor(0, 10);
-    oled.print("Patch ");
-    oled.print(patch);
-    oled.display();
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.print(p->name);
+    display.setCursor(0, 10);
+    display.print("Patch ");
+    display.print(patch);
+    display.display();
   }
 }
 
@@ -216,7 +217,8 @@ const uint8_t CLOSEDVAL = 0x30;
 const uint8_t OPENVAL = 0x70;
 const uint8_t GLISSANDO_STEPS = OPENVAL - CLOSEDVAL;
 
-bool playing = false;
+uint8_t loopno = 0;
+uint8_t last_note = 0;
 
 void loop() {
   uint8_t keys = 0;
@@ -225,10 +227,15 @@ void loop() {
   uint8_t glissandoNote;
   float glissandoOpenness = 0;
   bool silent = false;
-  bool knee = cap.filteredData(KNEE_OFFSET) < CLOSEDVAL;
-  uint8_t buttons = trellis.isPressed(BUTTON_DOWN)?1:0 | trellis.isPressed(BUTTON_UP)?2:0;
+  uint8_t paj_knee = 127;
+  bool knee = false;
 
-  trellis.tick();
+  loopno++;
+
+  paj7620ReadReg(0x6c, 1, &paj_knee);
+  if (paj_knee  > 240) {
+    knee = true;
+  }
 
   for (int i = 0; i < 8; i++) {
     uint16_t val = max(cap.filteredData(i+KEY_OFFSET), CLOSEDVAL);
@@ -246,9 +253,6 @@ void loop() {
       }
     }
     
-    // print key states
-    //trellis.setPixelColor(7 - i, trellis.ColorHSV(65536/12, 255, 120*openness));
-    trellis.setPixelColor(7 - i, trellis.ColorHSV(22222*openness, 255, 40));
   }
   
   note = uilleann_matrix[keys];
@@ -265,20 +269,37 @@ void loop() {
       silent = true;
     }
   }
+  // Look up the note name
+    char *note_name = NoteNames[note % 12];
+    if (silent) {
+      note_name = "-";
+    }
 
   // Jump octave if the bag is squished
   //bag = !digitalRead(BAG);
-  if (bag.isPressed()) {
+  if (use_bag && bag.isPressed()) {
     if (keys & bit(7)) {
       note += 12;
       glissandoNote += 12;
     }
   }
 
-  // Read some trellis button states
-  if (buttons) {
-    updateTunables(buttons, note);
-  }
+#if 0
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.print("mem: ");
+    display.print(AudioMemoryUsageMax());
+    display.print(" prx: ");
+    display.print(paj_knee);
+    display.setCursor(0, 24);
+    display.print("Note: ");
+    display.print(note);
+    display.print(" n: ");
+    display.print(loopno);
+    display.display();
+    return;
+#endif
+
 
   if (silent) {
     FMVoiceNoteOff(&Chanter);
@@ -304,5 +325,13 @@ void loop() {
     } else {
       FMVoiceNoteOn(&Chanter, pitch);
     }
+  }
+
+  if (note != last_note) {
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.print(note_name);
+    display.display();
+    last_note = note;
   }
 }
