@@ -128,8 +128,8 @@ void setup() {
 
   // Turn on drones
   for (int i=0; i<3; i++) {
-    FMVoiceLoadPatch(&Drones[i], &Bank[0]);
-    FMVoiceNoteOn(&Drones[i], JustPitches[NOTE_D4 - 12*i] + i);
+    Drones[i].LoadPatch(&Bank[0]);
+    Drones[i].NoteOn(JustPitches[NOTE_D4 - 12*i] + i);
   }
 
   // Turn on all mixer channels
@@ -201,7 +201,7 @@ void updateTunables(uint8_t buttons, int note) {
     patch = (patch + bankSize) % bankSize;
 
     FMPatch *p = &Bank[patch];
-    FMVoiceLoadPatch(&Chanter, p);
+    Chanter.LoadPatch(p);
 
     display.clearDisplay();
     display.setCursor(0, 0);
@@ -302,7 +302,7 @@ void loop() {
 
 
   if (silent) {
-    FMVoiceNoteOff(&Chanter);
+    Chanter.NoteOff();
   } else {
     // Calculate pitch, and glissando pitch
     uint16_t pitch = JustPitches[note];
@@ -321,9 +321,9 @@ void loop() {
     }
 
     if (Chanter.playing) {
-      FMVoiceSetPitch(&Chanter, pitch);
+      Chanter.SetPitch(pitch);
     } else {
-      FMVoiceNoteOn(&Chanter, pitch);
+      Chanter.NoteOn(pitch);
     }
   }
 
