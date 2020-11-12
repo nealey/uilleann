@@ -1,3 +1,6 @@
+#pragma once
+#include "notes.h"
+
 #define CCCC NOTE_CS5, NOTE_CS5, NOTE_CS5, NOTE_CS5
 #define CCDD NOTE_CS5, NOTE_CS5, NOTE_D5, NOTE_D5
 #define CDCD NOTE_CS5, NOTE_D5, NOTE_CS5, NOTE_D5

@@ -2,6 +2,7 @@
 
 #pragma once
 #include "algorithms.h"
+#include "synth.h"
 
 // Waveform, offset, multiplier, delay, attack, holdAmp, hold, decay, sustainAmp, release
 FMPatch Bank[] = {

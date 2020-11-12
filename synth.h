@@ -73,7 +73,7 @@ typedef struct FMOperator {
  * can be accomplished by patching an operator into itself.
  */
 typedef struct FMPatch {
-  char *name;
+  const char *name;
   float gains[NUM_OPERATORS][NUM_OPERATORS+1];
   FMOperator operators[NUM_OPERATORS];
 } FMPatch;

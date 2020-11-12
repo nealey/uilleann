@@ -8,11 +8,14 @@
 #include "synth.h"
 #include "patches.h"
 #include "notes.h"
-#include "fingering.h"
+#include "pipe.h"
 
 #define DRONES
 #define DEBUG
-#define KEY_OFFSET 2
+
+Pipe pipe;
+Adafruit_SSD1306 display(128, 32, &Wire, -1);
+int currentPatch = 0;
 
 FMVoice Chanter;
 FMVoice Drones[3];
@@ -61,13 +64,6 @@ AudioConnection FMVoicePatchCords[] = {
   FMVoiceWiring(Regulators[2]),
 };
 
-int currentPatch = 0;
-
-Adafruit_MPR121 cap = Adafruit_MPR121();
-Adafruit_SSD1306 display(128, 32, &Wire, -1);
-QwiicButton bag;
-bool use_bag;
-
 void blink(bool forever) {
   for (;;) {
     digitalWrite(LED_BUILTIN, true);
@@ -88,12 +84,7 @@ void setup() {
   delay(100);
   Wire.begin();
 
-  // Initialize gesture/proximity sensor
-  if (paj7620Init()) {
-    // XXX: Error handling
-  }
-
-  // Initialize display display
+  // Initialize display
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3c)) {
     blink(true);
   }
@@ -103,13 +94,8 @@ void setup() {
   display.print("Starting");
   display.display();
 
-  // Initialize bag
-  bag.begin();
-  use_bag = bag.isConnected();
-
-  // Initialize touch sensor
-  while (!cap.begin(0x5A)) {
-    display.clearDisplay();
+  while (!pipe.Init()) {
+     display.clearDisplay();
     display.setCursor(0, 0);
     display.print("Pipe?");
     display.display();
@@ -117,7 +103,7 @@ void setup() {
   }
 
   // Set aside some memory for the audio library  
-  AudioMemory(120);
+  AudioMemory(20);
 
   // initialize tunables
   updateTunables(3, 0);
@@ -143,6 +129,11 @@ void setup() {
   mixL.gain(3, 0.1);
   mixR.gain(3, 0.1);
 #endif
+
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.print("Done!");
+  display.display();
 }
 
 #define INIT_PITCH_ADJUST 0
@@ -202,88 +193,17 @@ void updateTunables(uint8_t buttons, int note) {
 
     FMPatch *p = &Bank[patch];
     Chanter.LoadPatch(p);
-
-    display.clearDisplay();
-    display.setCursor(0, 0);
-    display.print(p->name);
-    display.setCursor(0, 10);
-    display.print("Patch ");
-    display.print(patch);
-    display.display();
   }
 }
 
-const uint8_t CLOSEDVAL = 0x30;
-const uint8_t OPENVAL = 0x70;
-const uint8_t GLISSANDO_STEPS = OPENVAL - CLOSEDVAL;
-
-uint8_t loopno = 0;
-uint8_t last_note = 0;
 
 void loop() {
-  uint8_t keys = 0;
-  uint8_t note;
-  uint8_t glissandoKeys = 0;
-  uint8_t glissandoNote;
-  float glissandoOpenness = 0;
-  bool silent = false;
-  uint8_t paj_knee = 127;
-  bool knee = false;
+  static uint8_t last_note = 0;
+  bool updateDisplay = false;
+  bool setupMode = false;
 
-  loopno++;
-
-  paj7620ReadReg(0x6c, 1, &paj_knee);
-  if (paj_knee  > 240) {
-    knee = true;
-  }
-
-  for (int i = 0; i < 8; i++) {
-    uint16_t val = max(cap.filteredData(i+KEY_OFFSET), CLOSEDVAL);
-    float openness = ((val - CLOSEDVAL) / float(GLISSANDO_STEPS));
-
-    // keys = all keys which are at least touched
-    // glissandoKeys = all keys which are fully closed
-    // The glissando operation computes the difference.
-    if (openness < 1.0) {
-      glissandoOpenness = max(glissandoOpenness, openness);
-      bitSet(keys, i);
-
-      if (openness == 0.0) {
-        bitSet(glissandoKeys, i);
-      }
-    }
-    
-  }
+  pipe.Update();
   
-  note = uilleann_matrix[keys];
-  glissandoNote = uilleann_matrix[glissandoKeys];
-
-  bool alt = note & 0x80;
-  bool galt = glissandoNote & 0x80;
-  note = note & 0x7f;
-  glissandoNote = glissandoNote & 0x7f;
-
-  // All keys closed + knee = no sound
-  if (knee) {
-    if (keys == 0xff) {
-      silent = true;
-    }
-  }
-  // Look up the note name
-    char *note_name = NoteNames[note % 12];
-    if (silent) {
-      note_name = "-";
-    }
-
-  // Jump octave if the bag is squished
-  //bag = !digitalRead(BAG);
-  if (use_bag && bag.isPressed()) {
-    if (keys & bit(7)) {
-      note += 12;
-      glissandoNote += 12;
-    }
-  }
-
 #if 0
     display.clearDisplay();
     display.setCursor(0, 0);
@@ -300,26 +220,34 @@ void loop() {
     return;
 #endif
 
+// If we're infinitely (for the sensor) off the knee,
+// go into setup mode!
+if (pipe.kneeClosedness == 0) {
+  setupMode = true;
+  updateDisplay = true;
+}
 
-  if (silent) {
+  if (pipe.silent) {
     Chanter.NoteOff();
   } else {
     // Calculate pitch, and glissando pitch
-    uint16_t pitch = JustPitches[note];
-    uint16_t glissandoPitch = JustPitches[glissandoNote];
+    uint16_t pitch = JustPitches[pipe.note];
+    uint16_t glissandoPitch = JustPitches[pipe.glissandoNote];
 
-    if (alt) {
+    // Bend pitch if fewer than 3 half steps away
+    if (abs(pipe.glissandoNote - pipe.note) < 3) {
+      float diff = glissandoPitch - pitch;
+      pitch += diff * pipe.glissandoOpenness;
+    }
+
+  // Apply a low shelf filter if this is the alternate fingering
+    if (pipe.altFingering) {
       biquad1.setLowShelf(0, 2000, 0.2, 1);
     } else {
       biquad1.setHighShelf(0, 1000, 1.0, 1);
     }
   
-    // Bend pitch if fewer than 3 half steps away
-    if (abs(glissandoNote - note) < 3) {
-      float diff = glissandoPitch - pitch;
-      pitch += diff * glissandoOpenness;
-    }
-
+    // We've figured out what pitch to play, now we can play it.
     if (Chanter.playing) {
       Chanter.SetPitch(pitch);
     } else {
@@ -327,11 +255,33 @@ void loop() {
     }
   }
 
-  if (note != last_note) {
+  // Look up the note name
+    const char *note_name = NoteNames[pipe.note % 12];
+    if (pipe.silent) {
+      note_name = "--";
+      updateDisplay = true;
+    }
+
+  if (pipe.note != last_note) {
+    updateDisplay = true;
+  }
+
+  if (updateDisplay) {
     display.clearDisplay();
+    display.setTextSize(2);
     display.setCursor(0, 0);
-    display.print(note_name);
+    display.print(Chanter.patch->name);
+ 
+    if (setupMode) {
+      // THE SETUP DONUT
+      display.fillCircle(128-8, 16+8, 4, SSD1306_WHITE);
+      display.fillCircle(128-8, 16+8, 2, SSD1306_BLACK);
+    } else {
+      display.setCursor(0, 16);
+      display.print(note_name);
+    }
+
     display.display();
-    last_note = note;
+    last_note = pipe.note;
   }
 }
