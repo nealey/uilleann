@@ -10,8 +10,13 @@
 #include "notes.h"
 #include "pipe.h"
 
+#if defined(ADAFRUIT_TRELLIS_M4_EXPRESS)
+#include <Adafruit_NeoTrellisM4.h>
+Adafruit_NeoTrellisM4 trellis = Adafruit_NeoTrellisM4();
+#endif
+
 #define DRONES
-#define DEBUG
+#define DEBUG false
 
 Pipe pipe;
 Adafruit_SSD1306 display(128, 32, &Wire, -1);
@@ -26,13 +31,18 @@ AudioMixer4          mixDrones;
 AudioMixer4          mixRegulators;
 AudioMixer4          mixL;
 AudioMixer4          mixR;
-AudioOutputI2S       out1;
 AudioSynthNoiseWhite noise;
+
+#if defined(ADAFRUIT_TRELLIS_M4_EXPRESS)
+AudioOutputAnalogStereo out1;
+#else
+AudioOutputI2S       out1;
+#endif
 
 AudioConnection FMVoicePatchCords[] = {
   //{0, 0, 0, 0}, // For some reason, the first one is ignored
 
-  {noise, 0, mixDrones, 3},
+//  {noise, 0, mixDrones, 3},
   {noise, 0, mixL, 3},
   {noise, 0, mixR, 3},
 
@@ -75,14 +85,14 @@ void blink(bool forever) {
 }
 
 void setup() {
-  pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, true);
-
+  // Wire.begin needs a moment, so let's do some math.
   setupJustPitches(NOTE_D4, PITCH_D4);
 
-  // Wire.begin needs a moment
-  delay(100);
   Wire.begin();
+
+  // PREPARE TO BLINK
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, true);
 
   // Initialize display
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3c)) {
@@ -93,6 +103,10 @@ void setup() {
   display.setTextColor(SSD1306_WHITE);
   display.print("Starting");
   display.display();
+
+#if defined(ADAFRUIT_TRELLIS_M4_EXPRESS)
+  trellis.begin();
+#endif
 
   while (!pipe.Init()) {
      display.clearDisplay();
@@ -203,22 +217,29 @@ void loop() {
   bool setupMode = false;
 
   pipe.Update();
+
+#if defined(ADAFRUIT_TRELLIS_M4_EXPRESS)
+  trellis.tick();
+
+  trellis.setPixelColor(0, trellis.ColorHSV(120*pipe.kneeClosedness));
+#endif
   
-#if 0
+    static uint16_t loopno = 0;
+  if (false) {
     display.clearDisplay();
+    display.setTextSize(1);
     display.setCursor(0, 0);
     display.print("mem: ");
     display.print(AudioMemoryUsageMax());
     display.print(" prx: ");
-    display.print(paj_knee);
+    display.print(pipe.kneeClosedness);
     display.setCursor(0, 24);
     display.print("Note: ");
-    display.print(note);
+    display.print(pipe.note);
     display.print(" n: ");
-    display.print(loopno);
+    display.print(loopno++);
     display.display();
-    return;
-#endif
+  }
 
 // If we're infinitely (for the sensor) off the knee,
 // go into setup mode!
