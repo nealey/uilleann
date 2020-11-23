@@ -12,7 +12,7 @@
 
 #if defined(ADAFRUIT_TRELLIS_M4_EXPRESS)
 #include <Adafruit_NeoTrellisM4.h>
-Adafruit_NeoTrellisM4 trellis = Adafruit_NeoTrellisM4();
+Adafruit_NeoTrellisM4 trellis;// = Adafruit_NeoTrellisM4();
 #endif
 
 #define DRONES
@@ -38,6 +38,8 @@ AudioOutputAnalogStereo out1;
 #else
 AudioOutputI2S       out1;
 #endif
+
+AudioControlSGTL5000 sgtl5000;
 
 AudioConnection FMVoicePatchCords[] = {
   //{0, 0, 0, 0}, // For some reason, the first one is ignored
@@ -118,6 +120,10 @@ void setup() {
 
   // Set aside some memory for the audio library  
   AudioMemory(20);
+
+  // Set up the SGTL5000 using I2C
+  sgtl5000.enable();
+  sgtl5000.volume(0.3);
 
   // initialize tunables
   updateTunables(3, 0);
@@ -221,22 +227,24 @@ void loop() {
 #if defined(ADAFRUIT_TRELLIS_M4_EXPRESS)
   trellis.tick();
 
-  trellis.setPixelColor(0, trellis.ColorHSV(120*pipe.kneeClosedness));
+  trellis.setPixelColor(1, trellis.ColorHSV(millis(), 255, 120));
+  trellis.setPixelColor(0, trellis.ColorHSV(64*pipe.kneeClosedness, 255, 120));
 #endif
   
-    static uint16_t loopno = 0;
   if (false) {
+    static uint16_t loopno = 0;
+
     display.clearDisplay();
     display.setTextSize(1);
     display.setCursor(0, 0);
-    display.print("mem: ");
-    display.print(AudioMemoryUsageMax());
-    display.print(" prx: ");
-    display.print(pipe.kneeClosedness);
-    display.setCursor(0, 24);
-    display.print("Note: ");
-    display.print(pipe.note);
-    display.print(" n: ");
+    // display.print("mem: ");
+    // display.print(AudioMemoryUsageMax());
+    // display.print(" prx: ");
+    // display.print(pipe.kneeClosedness);
+    // display.setCursor(0, 24);
+    // display.print("Note: ");
+    // display.print(pipe.note);
+    // display.print(" n: ");
     display.print(loopno++);
     display.display();
   }
@@ -276,7 +284,7 @@ if (pipe.kneeClosedness == 0) {
     }
   }
 
-  // Look up the note name
+  // // Look up the note name
     const char *note_name = NoteNames[pipe.note % 12];
     if (pipe.silent) {
       note_name = "--";
@@ -298,11 +306,11 @@ if (pipe.kneeClosedness == 0) {
       display.fillCircle(128-8, 16+8, 4, SSD1306_WHITE);
       display.fillCircle(128-8, 16+8, 2, SSD1306_BLACK);
     } else {
-      display.setCursor(0, 16);
+      display.setCursor(0, 8);
       display.print(note_name);
     }
 
     display.display();
-    last_note = pipe.note;
+   last_note = pipe.note;
   }
 }
