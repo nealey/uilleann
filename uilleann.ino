@@ -5,6 +5,7 @@
 #include <SparkFun_Qwiic_Button.h>
 #include <Adafruit_MPR121.h>
 #include <paj7620.h>
+#include <Fonts/FreeSans9pt7b.h>
 #include "synth.h"
 #include "patches.h"
 #include "notes.h"
@@ -218,10 +219,6 @@ void updateTunables(uint8_t buttons, int note) {
 
 
 void loop() {
-  static uint8_t last_note = 0;
-  bool updateDisplay = false;
-  bool setupMode = false;
-
   pipe.Update();
 
 #if defined(ADAFRUIT_TRELLIS_M4_EXPRESS)
@@ -230,31 +227,52 @@ void loop() {
   trellis.setPixelColor(1, trellis.ColorHSV(millis(), 255, 120));
   trellis.setPixelColor(0, trellis.ColorHSV(64*pipe.kneeClosedness, 255, 120));
 #endif
-  
-  if (false) {
-    static uint16_t loopno = 0;
 
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setCursor(0, 0);
-    // display.print("mem: ");
-    // display.print(AudioMemoryUsageMax());
-    // display.print(" prx: ");
-    // display.print(pipe.kneeClosedness);
-    // display.setCursor(0, 24);
-    // display.print("Note: ");
-    // display.print(pipe.note);
-    // display.print(" n: ");
-    display.print(loopno++);
-    display.display();
+  // If we're infinitely (for the sensor) off the knee,
+  // go into setup mode!
+  if (pipe.kneeClosedness == 0) {
+    doSetup();
+  } else {
+    doPlay();
+  }
+}
+
+/** doSetup performs "setup mode" behavior for the pipe.
+ *
+ * Setup mode sets the following new meanings to the buttons:
+ * 
+ *  key: function [alternate]
+ * C♯:  Alt
+ * B♮: Chanter
+ * A♮: Regulators
+ * G♮: Drones
+ * F♯: Up [+ coarse]
+ * E♮: Down [- coarse]
+ * E♭: + [+ fine]
+ * D♮: - [- fine]
+ * 
+ */
+void doSetup() {
+  display.clearDisplay();
+
+  bool alt = bitRead(pipe.keys, 7);
+
+  display.fillRect(0, 0, 40, 32, SSD1306_WHITE);
+  display.setFont(&FreeSans9pt7b);
+  display.setCursor(1, 13);
+  display.setTextColor(SSD1306_BLACK);
+  if (alt) {
+    display.print("pipe");
+  } else {
+    display.print("alt");
   }
 
-// If we're infinitely (for the sensor) off the knee,
-// go into setup mode!
-if (pipe.kneeClosedness == 0) {
-  setupMode = true;
-  updateDisplay = true;
+  display.display();
 }
+
+void doPlay() {
+  static uint8_t last_note = 0;
+  bool updateDisplay = false;
 
   if (pipe.silent) {
     Chanter.NoteOff();
@@ -284,7 +302,7 @@ if (pipe.kneeClosedness == 0) {
     }
   }
 
-  // // Look up the note name
+  // Look up the note name
     const char *note_name = NoteNames[pipe.note % 12];
     if (pipe.silent) {
       note_name = "--";
@@ -297,18 +315,18 @@ if (pipe.kneeClosedness == 0) {
 
   if (updateDisplay) {
     display.clearDisplay();
+
+    display.setCursor(0, 16);
     display.setTextSize(2);
-    display.setCursor(0, 0);
     display.print(Chanter.patch->name);
- 
-    if (setupMode) {
-      // THE SETUP DONUT
-      display.fillCircle(128-8, 16+8, 4, SSD1306_WHITE);
-      display.fillCircle(128-8, 16+8, 2, SSD1306_BLACK);
-    } else {
-      display.setCursor(0, 8);
-      display.print(note_name);
-    }
+  
+    display.setCursor(0, 0);
+    display.setTextSize(2);
+    display.print(note_name);
+
+    display.setCursor(40, 0);
+    display.setTextSize(1);
+    display.print(pipe.kneeClosedness);
 
     display.display();
    last_note = pipe.note;
