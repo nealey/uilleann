@@ -1,4 +1,5 @@
 #include "pipe.h"
+#include "tuning.h"
 #include "fingering.h"
 
 // Kludge time: this is something I did just to make my breadboard look nicer.
@@ -9,6 +10,7 @@
 #define GLISSANDO_STEPS (OPENVAL - CLOSEDVAL)
 
 Pipe::Pipe() {
+    keysLast = 0;
 }
 
 bool Pipe::Init() {
@@ -44,6 +46,7 @@ void Pipe::Update() {
     // 0x6c is actually 8 bytes, but all 8 are always the same...
     paj7620ReadReg(0x6c, 1, &kneeClosedness);
 
+    keysLast = keys;
     keys = 0;
     glissandoKeys = 0;
     for (int i=0; i<8; i++) {
@@ -63,22 +66,33 @@ void Pipe::Update() {
     }
 
     // Look up notes in the big table
-    note = uilleann_matrix[keys];
-    glissandoNote = uilleann_matrix[glissandoKeys];
+    struct Fingering f = uilleann_matrix[keys];
+    struct Fingering gf = uilleann_matrix[glissandoKeys];
+
+    note = f.note;
+    glissandoNote = gf.note;
 
     // Was the high bit set? That indicates "alternate fingering", which sounds different.
-    altFingering = (note & 0x80);
-
-    note &= 0x7f;
-    glissandoNote &= 0x7f;
+    altFingering = f.alt;
 
     // If the bag is squished, jump up an octave
     // But only if the left thumb is down!
     if (bag && (keys & bit(7))) {
-        note += 12;
-        glissandoNote += 12;
+        note += NOTE_OCTAVE;
+        glissandoNote += NOTE_OCTAVE;
     }
 
     // All keys closed + knee = no sound
     silent = ((kneeClosedness > 240) && (keys == 0xff));
+}
+
+bool Pipe::Pressed(uint8_t key) {
+    return bitRead(keys, key);
+}
+
+bool Pipe::JustPressed(uint8_t key) {
+    if (bitRead(keys, key)) {
+        return !bitRead(keysLast, key);
+    }
+    return false;
 }

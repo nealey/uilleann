@@ -1,80 +1,86 @@
-#include <Audio.h>
-#include <Wire.h>
 #include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
-#include <SparkFun_Qwiic_Button.h>
 #include <Adafruit_MPR121.h>
-#include <paj7620.h>
+#include <Adafruit_SSD1306.h>
+#include <Audio.h>
 #include <Fonts/FreeSans9pt7b.h>
-#include "synth.h"
+#include <SparkFun_Qwiic_Button.h>
+#include <Wire.h>
+#include <paj7620.h>
+#include <stdio.h>
+
 #include "patches.h"
-#include "notes.h"
 #include "pipe.h"
+#include "synth.h"
+#include "tuning.h"
 
 #if defined(ADAFRUIT_TRELLIS_M4_EXPRESS)
 #include <Adafruit_NeoTrellisM4.h>
-Adafruit_NeoTrellisM4 trellis;// = Adafruit_NeoTrellisM4();
+Adafruit_NeoTrellisM4 trellis;  // = Adafruit_NeoTrellisM4();
 #endif
 
-#define DRONES
-#define DEBUG false
-
 Pipe pipe;
+Tuning tuning = Tuning(NOTE_D4, PITCH_CONCERT_D4, TUNINGSYSTEM_JUST);
+
 Adafruit_SSD1306 display(128, 32, &Wire, -1);
 int currentPatch = 0;
 
+// Settings
+uint8_t intonation = 0;
+int16_t pitchAdjust = 0;
+uint8_t patch[4] = {0};
+float volume[4] = {0};
+const char *settingNames[4] = {"c", "r", "d", "*"};
+
+// Pipes
 FMVoice Chanter;
 FMVoice Drones[3];
 FMVoice Regulators[3];
 
-AudioFilterBiquad    biquad1;
-AudioMixer4          mixDrones;
-AudioMixer4          mixRegulators;
-AudioMixer4          mixL;
-AudioMixer4          mixR;
+AudioFilterBiquad biquad1;
+AudioMixer4 mixDrones;
+AudioMixer4 mixRegulators;
+AudioMixer4 mixL;
+AudioMixer4 mixR;
 AudioSynthNoiseWhite noise;
 
 #if defined(ADAFRUIT_TRELLIS_M4_EXPRESS)
 AudioOutputAnalogStereo out1;
 #else
-AudioOutputI2S       out1;
+AudioOutputI2S out1;
 #endif
 
 AudioControlSGTL5000 sgtl5000;
 
 AudioConnection FMVoicePatchCords[] = {
-  //{0, 0, 0, 0}, // For some reason, the first one is ignored
+    {noise, 0, mixL, 3},
+    {noise, 0, mixR, 3},
 
-//  {noise, 0, mixDrones, 3},
-  {noise, 0, mixL, 3},
-  {noise, 0, mixR, 3},
+    {Chanter.outputMixer, 0, biquad1, 0},
+    {biquad1, 0, mixL, 0},
+    {biquad1, 0, mixR, 0},
 
-  {Chanter.outputMixer, 0, biquad1, 0},
-  {biquad1, 0, mixL, 0},
-  {biquad1, 0, mixR, 0},
+    {Drones[0].outputMixer, 0, mixDrones, 0},
+    {Drones[1].outputMixer, 0, mixDrones, 1},
+    {Drones[2].outputMixer, 0, mixDrones, 2},
+    {mixDrones, 0, mixL, 1},
+    {mixDrones, 0, mixR, 1},
 
-  {Drones[0].outputMixer, 0, mixDrones, 0},
-  {Drones[1].outputMixer, 0, mixDrones, 1},
-  {Drones[2].outputMixer, 0, mixDrones, 2},
-  {mixDrones, 0, mixL, 1},
-  {mixDrones, 0, mixR, 1},
+    {Regulators[0].outputMixer, 0, mixRegulators, 0},
+    {Regulators[1].outputMixer, 0, mixRegulators, 1},
+    {Regulators[2].outputMixer, 0, mixRegulators, 2},
+    {mixRegulators, 0, mixL, 2},
+    {mixRegulators, 0, mixR, 2},
 
-  {Regulators[0].outputMixer, 0, mixRegulators, 0},
-  {Regulators[1].outputMixer, 0, mixRegulators, 1},
-  {Regulators[2].outputMixer, 0, mixRegulators, 2},
-  {mixRegulators, 0, mixL, 2},
-  {mixRegulators, 0, mixR, 2},
+    {mixL, 0, out1, 0},
+    {mixR, 0, out1, 1},
 
-  {mixL, 0, out1, 0},
-  {mixR, 0, out1, 1},
-
-  FMVoiceWiring(Chanter),
-  FMVoiceWiring(Drones[0]),
-  FMVoiceWiring(Drones[1]),
-  FMVoiceWiring(Drones[2]),
-  FMVoiceWiring(Regulators[0]),
-  FMVoiceWiring(Regulators[1]),
-  FMVoiceWiring(Regulators[2]),
+    FMVoiceWiring(Chanter),
+    FMVoiceWiring(Drones[0]),
+    FMVoiceWiring(Drones[1]),
+    FMVoiceWiring(Drones[2]),
+    FMVoiceWiring(Regulators[0]),
+    FMVoiceWiring(Regulators[1]),
+    FMVoiceWiring(Regulators[2]),
 };
 
 void blink(bool forever) {
@@ -83,13 +89,48 @@ void blink(bool forever) {
     delay(200);
     digitalWrite(LED_BUILTIN, false);
     delay(200);
-    if (! forever) break;
+    if (!forever) {
+      return;
+    }
   }
 }
 
+void diag(const char *fmt, ...) {
+  va_list args;
+  char s[80];
+
+  va_start(args, fmt);
+  vsnprintf(s, sizeof(s)-1, fmt, args);
+  va_end(args);
+
+  display.clearDisplay();
+  display.drawRect(124, 16, 4, 16, SSD1306_WHITE);
+  display.setTextColor(SSD1306_WHITE);
+  display.setTextSize(1);
+
+  display.setCursor(56, 24);
+  display.print(__DATE__);
+
+#if 0
+  display.setCursor(0, 16);
+  display.print(fn);
+  display.print(":");
+  display.print(lineno);
+#endif
+
+  display.setCursor(0, 0);
+  display.print(s);
+
+  display.display();
+}
+
 void setup() {
-  // Wire.begin needs a moment, so let's do some math.
-  setupJustPitches(NOTE_D4, PITCH_D4);
+  // Initialize settings
+  // XXX: Read these from persistent storage later
+  for (int i = 0; i < 4; i++) {
+    patch[i] = 0;
+    volume[i] = 0.75;
+  }
 
   Wire.begin();
 
@@ -101,131 +142,62 @@ void setup() {
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3c)) {
     blink(true);
   }
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  display.print("Starting");
-  display.display();
+  diag("Hello!");
 
 #if defined(ADAFRUIT_TRELLIS_M4_EXPRESS)
+  diag("Trellis...");
   trellis.begin();
 #endif
 
+  diag("Pipe...");
   while (!pipe.Init()) {
-     display.clearDisplay();
-    display.setCursor(0, 0);
-    display.print("Pipe?");
-    display.display();
+    diag("No pipe. Is it connected?");
     blink(false);
   }
 
-  // Set aside some memory for the audio library  
+  diag("Audio...");
+  // Set aside some memory for the audio library
   AudioMemory(20);
 
   // Set up the SGTL5000 using I2C
   sgtl5000.enable();
   sgtl5000.volume(0.3);
 
-  // initialize tunables
-  updateTunables(3, 0);
-
   // Initialize processor and memory measurements
   AudioProcessorUsageMaxReset();
   AudioMemoryUsageMaxReset();
 
+  diag("Drones...");
   // Turn on drones
-  for (int i=0; i<3; i++) {
+  for (int i = 0; i < 3; i++) {
+    Note note = NOTE_D4 - (NOTE_OCTAVE * i);
+    float pitch =
+        tuning.GetPitch(note) * (0.01 * (i - 1));  // Detune just a touch
     Drones[i].LoadPatch(&Bank[0]);
-    Drones[i].NoteOn(JustPitches[NOTE_D4 - 12*i] + i);
+    Drones[i].NoteOn(pitch);
   }
 
   // Turn on all mixer channels
-  for (int i=0; i<4; i++) {
+  for (int i = 0; i < 4; i++) {
     mixL.gain(i, 0.5);
     mixR.gain(i, 0.6);
   }
-  
-#ifdef DEBUG
-  noise.amplitude(0.1);
-  mixL.gain(3, 0.1);
-  mixR.gain(3, 0.1);
-#endif
 
-  display.clearDisplay();
-  display.setCursor(0, 0);
-  display.print("Done!");
-  display.display();
+  diag("Done!");
 }
-
-#define INIT_PITCH_ADJUST 0
-#define INIT_GAIN 0.7
-#define INIT_PATCH 0
-
-int16_t pitchAdjust;
-float chanterGain;
-int patch;
-
-void updateTunables(uint8_t buttons, int note) {
-  // Pitch adjust if playing A
-  if (!note || (note == NOTE_A4)) {
-    switch (buttons) {
-    case 3:
-      pitchAdjust = INIT_PITCH_ADJUST;
-      break;
-    case 2:
-      pitchAdjust += 4;
-      break;
-    case 1:
-      pitchAdjust -= 4;
-      break;
-    }
-  }
-
-  float adj = pow(2, pitchAdjust / 32768.0);
-  setupJustPitches(NOTE_D4, PITCH_D4*adj);
-
-  if (!note || (note == NOTE_G4)) {
-    // Volume adjust if playing G
-    switch (buttons) {
-    case 3:
-      chanterGain = INIT_GAIN;
-      break;
-    case 2:
-      chanterGain = min(chanterGain+0.005, 1.0);
-      break;
-    case 1:
-      chanterGain = max(chanterGain-0.005, 0.0);
-      break;
-    }
-  }
-  for (int i=0; i<3; i++) {
-    mixL.gain(i, chanterGain);
-    mixR.gain(i, chanterGain);
-  }
-
-  if (!note || (note == NOTE_CS5)) {
-    if (buttons == 3) {
-      patch = INIT_PATCH;
-    }
-
-    // wrap
-    int bankSize = sizeof(Bank) / sizeof(Bank[0]);
-    patch = (patch + bankSize) % bankSize;
-
-    FMPatch *p = &Bank[patch];
-    Chanter.LoadPatch(p);
-  }
-}
-
 
 void loop() {
   pipe.Update();
+  diag("loop %d", millis());
 
 #if defined(ADAFRUIT_TRELLIS_M4_EXPRESS)
   trellis.tick();
 
   trellis.setPixelColor(1, trellis.ColorHSV(millis(), 255, 120));
-  trellis.setPixelColor(0, trellis.ColorHSV(64*pipe.kneeClosedness, 255, 120));
+  {
+    uint16_t color = trellis.ColorHSV(64 * pipe.kneeClosedness, 255, 120);
+    trellis.setPixelColor(0, color);
+  }
 #endif
 
   // If we're infinitely (for the sensor) off the knee,
@@ -240,7 +212,7 @@ void loop() {
 /** doSetup performs "setup mode" behavior for the pipe.
  *
  * Setup mode sets the following new meanings to the buttons:
- * 
+ *
  *  key: function [alternate]
  * C♯:  Alt
  * B♮: Chanter
@@ -250,21 +222,66 @@ void loop() {
  * E♮: Down [- coarse]
  * E♭: + [+ fine]
  * D♮: - [- fine]
- * 
+ *
  */
 void doSetup() {
   display.clearDisplay();
 
-  bool alt = bitRead(pipe.keys, 7);
+  bool alt = pipe.Pressed(7);
 
-  display.fillRect(0, 0, 40, 32, SSD1306_WHITE);
-  display.setFont(&FreeSans9pt7b);
-  display.setCursor(1, 13);
-  display.setTextColor(SSD1306_BLACK);
+  // Draw indicator bar
+  display.fillRect(126, 0, 2, 32, SSD1306_WHITE);
+  display.setTextSize(1);
+  display.setCursor(0, 0);
+
   if (alt) {
-    display.print("pipe");
+    // Show settings for each of Chanter, Regulators, Drones
+    for (int i = 0; i < 3; i++) {
+      int p = patch[i];
+      int16_t x = 0;
+      int16_t y = i * 8;
+
+      display.setCursor(x, y);
+      if (pipe.Pressed(6 - i)) {
+        display.fillRect(x - 1, y, 8, 8, SSD1306_WHITE);
+        display.setTextColor(SSD1306_BLACK);
+      } else {
+        display.setTextColor(SSD1306_WHITE);
+      }
+      display.print(settingNames[i]);
+      x += 7;
+
+      display.drawRect(x, y + 2, 32, 4, SSD1306_WHITE);
+      display.fillRect(x, y + 2, 32 * volume[i], 4, SSD1306_WHITE);
+
+      x += 34;
+      display.setTextColor(SSD1306_WHITE);
+      display.setCursor(x, y);
+      if (p < 10) {
+        display.print(" ");
+      }
+      display.print(p);
+      display.print(" ");
+      display.print(Bank[p].name);
+    }
   } else {
-    display.print("alt");
+    if (pipe.Pressed(6)) {
+      float freq = PITCH_CONCERT_D4 + pitchAdjust;
+      Note note = NearestNote(freq);
+
+      display.setCursor(0, 0);
+      display.print(NoteName(note));
+      display.setCursor(6 + 6, 0);
+      display.print(freq);
+    } else if (pipe.Pressed(5)) {
+      display.print("fn2");
+    } else if (pipe.Pressed(4)) {
+      display.print("fn3");
+    } else {
+      display.setCursor(56, 8);
+      display.setTextSize(2);
+      display.print("Setup");
+    }
   }
 
   display.display();
@@ -278,8 +295,8 @@ void doPlay() {
     Chanter.NoteOff();
   } else {
     // Calculate pitch, and glissando pitch
-    uint16_t pitch = JustPitches[pipe.note];
-    uint16_t glissandoPitch = JustPitches[pipe.glissandoNote];
+    uint16_t pitch = tuning.GetPitch(pipe.note);
+    uint16_t glissandoPitch = tuning.GetPitch(pipe.glissandoNote);
 
     // Bend pitch if fewer than 3 half steps away
     if (abs(pipe.glissandoNote - pipe.note) < 3) {
@@ -287,13 +304,13 @@ void doPlay() {
       pitch += diff * pipe.glissandoOpenness;
     }
 
-  // Apply a low shelf filter if this is the alternate fingering
+    // Apply a low shelf filter if this is the alternate fingering
     if (pipe.altFingering) {
       biquad1.setLowShelf(0, 2000, 0.2, 1);
     } else {
       biquad1.setHighShelf(0, 1000, 1.0, 1);
     }
-  
+
     // We've figured out what pitch to play, now we can play it.
     if (Chanter.playing) {
       Chanter.SetPitch(pitch);
@@ -303,11 +320,11 @@ void doPlay() {
   }
 
   // Look up the note name
-    const char *note_name = NoteNames[pipe.note % 12];
-    if (pipe.silent) {
-      note_name = "--";
-      updateDisplay = true;
-    }
+  const char *note_name = NoteName(pipe.note);
+  if (pipe.silent) {
+    note_name = "--";
+    updateDisplay = true;
+  }
 
   if (pipe.note != last_note) {
     updateDisplay = true;
@@ -319,7 +336,7 @@ void doPlay() {
     display.setCursor(0, 16);
     display.setTextSize(2);
     display.print(Chanter.patch->name);
-  
+
     display.setCursor(0, 0);
     display.setTextSize(2);
     display.print(note_name);
@@ -329,6 +346,6 @@ void doPlay() {
     display.print(pipe.kneeClosedness);
 
     display.display();
-   last_note = pipe.note;
+    last_note = pipe.note;
   }
 }

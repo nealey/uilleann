@@ -4,6 +4,7 @@
 #include <SparkFun_Qwiic_Button.h>
 #include <Adafruit_MPR121.h>
 #include <paj7620.h>
+#include "tuning.h"
 
 class Pipe {
 public:
@@ -12,9 +13,16 @@ public:
 
     // keys are which keys are being pressed.
     uint8_t keys;
+    uint8_t keysLast;
 
     // note holds the note being played, according to the fingering chart.
-    uint8_t note;
+    Note note;
+
+    // glissandoNote is the note that would be played if partially open keys were fully open.
+    Note glissandoNote;
+
+    // glissandoOpenness is how "open" the holes are in the direction of the glissandoNote.
+    float glissandoOpenness;
 
     // silent is true if all keys and the knee are closed.
     bool silent;
@@ -25,12 +33,6 @@ public:
     // altFingering is true if the "alternate fingering" is being played.
     // This should sound different than the standard fingering.
     bool altFingering;
-
-    // glissandoNote is the note that would be played if partially open keys were fully open.
-    uint8_t glissandoNote;
-
-    // glissandoOpenness is how "open" the holes are in the direction of the glissandoNote.
-    float glissandoOpenness;
 
     Pipe();
 
@@ -43,6 +45,12 @@ public:
     //
     // It should be run once per loop.
     void Update();
+
+    // Pressed returns whether the given key is pressed.
+    bool Pressed(uint8_t key);
+
+    // JustPressed returns whether the given key was just pressed.
+    bool JustPressed(uint8_t key);
 
 private:
     Adafruit_MPR121 capSensor;
