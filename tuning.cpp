@@ -2,9 +2,6 @@
 
 #include <math.h>
 
-// 12th root of 2, used for Twelvetone Equal Temperament
-#define TET_CONST 1.059463
-
 Tuning::Tuning(Note base, float pitch, TuningSystem system) {
   Setup(base, pitch, system);
 }
@@ -14,18 +11,20 @@ Tuning::Tuning(Note base, float pitch) {
 
 // I like just Intonation.
 Tuning::Tuning() {
-#if 0
   Tuning(NOTE_D4, PITCH_CONCERT_D4, TUNINGSYSTEM_JUST);
-#endif
 }
 
-Note Tuning::GetBaseNote() { return baseNote; }
+Note Tuning::GetBaseNote() {
+  return baseNote;
+}
 
 void Tuning::SetTuningSystem(TuningSystem system) {
   Setup(baseNote, GetPitch(baseNote), system);
 }
 
-TuningSystem Tuning::GetSystem() { return system; }
+TuningSystem Tuning::GetTuningSystem() {
+  return system;
+}
 
 // setupOctaves computes the entire tuning frequency chart.
 //
@@ -53,7 +52,7 @@ void Tuning::setupOctaves(Note base) {
 void Tuning::setupEqual(Note base, float pitch) {
   pitches[base] = pitch;
   for (int i = 1; i < 12; i++) {
-    pitches[base + i] = pitches[base + i - 1] * TET_CONST;
+    pitches[base + i] = pitches[base + i - 1] * TET_SEMITONE_MULTIPLIER;
   }
 }
 
@@ -95,17 +94,43 @@ void Tuning::Setup(Note base, float pitch, TuningSystem system) {
   setupOctaves(base);
 }
 
-void Tuning::Setup(Note base, float pitch) { Setup(base, pitch, system); }
+void Tuning::Setup(Note base, float pitch) {
+  Setup(base, pitch, system);
+}
 
-float Tuning::GetPitch(Note note) { return pitches[note]; }
+float Tuning::GetPitch(Note note) {
+  return pitches[note];
+}
 
 Note NearestNote(float pitch) {
-  return Note(round(log2(pitch / PITCH_CONCERT_C0)));
+  return Note(round(log(pitch / PITCH_CONCERT_C0) / log(TET_SEMITONE_MULTIPLIER)));
 }
 
 const char *noteNames[]{
-    "C ", "C#", "D ", "Eb", "E ", "F ", "F#", "G ", "Ab", "A ", "Bb", "B ",
+    "C",
+    "C#",
+    "D",
+    "Eb",
+    "E",
+    "F",
+    "F#",
+    "G",
+    "Ab",
+    "A",
+    "Bb",
+    "B",
 };
 
-const char *NoteName(Note note) { return noteNames[note % 12]; }
+const char *NoteName(Note note) {
+  return noteNames[note % 12];
+}
 
+const char *TuningSystemName(TuningSystem system) {
+  switch (system) {
+    case TUNINGSYSTEM_EQUAL:
+      return "Equal";
+    case TUNINGSYSTEM_JUST:
+    default:
+      return "Just";
+  }
+}

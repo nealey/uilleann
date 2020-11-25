@@ -1,0 +1,3 @@
+BasedOnStyle: Chromium
+ColumnLimit: 0
+PointerAlignment: Right

@@ -3,7 +3,6 @@
 #include <Adafruit_SSD1306.h>
 #include <Audio.h>
 #include <Fonts/FreeSans9pt7b.h>
-#include <SparkFun_Qwiic_Button.h>
 #include <Wire.h>
 #include <paj7620.h>
 #include <stdio.h>
@@ -22,14 +21,12 @@ Pipe pipe;
 Tuning tuning = Tuning(NOTE_D4, PITCH_CONCERT_D4, TUNINGSYSTEM_JUST);
 
 Adafruit_SSD1306 display(128, 32, &Wire, -1);
-int currentPatch = 0;
 
 // Settings
-uint8_t intonation = 0;
-int16_t pitchAdjust = 0;
 uint8_t patch[4] = {0};
 float volume[4] = {0};
 const char *settingNames[4] = {"c", "r", "d", "*"};
+const char *buildDate = __DATE__;
 
 // Pipes
 FMVoice Chanter;
@@ -100,7 +97,7 @@ void diag(const char *fmt, ...) {
   char s[80];
 
   va_start(args, fmt);
-  vsnprintf(s, sizeof(s)-1, fmt, args);
+  vsnprintf(s, sizeof(s) - 1, fmt, args);
   va_end(args);
 
   display.clearDisplay();
@@ -109,7 +106,7 @@ void diag(const char *fmt, ...) {
   display.setTextSize(1);
 
   display.setCursor(56, 24);
-  display.print(__DATE__);
+  display.print(buildDate);
 
 #if 0
   display.setCursor(0, 16);
@@ -171,8 +168,7 @@ void setup() {
   // Turn on drones
   for (int i = 0; i < 3; i++) {
     Note note = NOTE_D4 - (NOTE_OCTAVE * i);
-    float pitch =
-        tuning.GetPitch(note) * (0.01 * (i - 1));  // Detune just a touch
+    float pitch = tuning.GetPitch(note) * (0.01 * (i - 1));  // Detune just a touch
     Drones[i].LoadPatch(&Bank[0]);
     Drones[i].NoteOn(pitch);
   }
@@ -187,25 +183,22 @@ void setup() {
 }
 
 void loop() {
+  static bool forceDisplayUpdate = true;
+
   pipe.Update();
-  diag("loop %d", millis());
 
 #if defined(ADAFRUIT_TRELLIS_M4_EXPRESS)
   trellis.tick();
-
-  trellis.setPixelColor(1, trellis.ColorHSV(millis(), 255, 120));
-  {
-    uint16_t color = trellis.ColorHSV(64 * pipe.kneeClosedness, 255, 120);
-    trellis.setPixelColor(0, color);
-  }
 #endif
 
   // If we're infinitely (for the sensor) off the knee,
   // go into setup mode!
   if (pipe.kneeClosedness == 0) {
     doSetup();
+    forceDisplayUpdate = true;
   } else {
-    doPlay();
+    doPlay(forceDisplayUpdate);
+    forceDisplayUpdate = false;
   }
 }
 
@@ -225,12 +218,21 @@ void loop() {
  *
  */
 void doSetup() {
+  static unsigned long quietUntil = 0;
+
+  // Stuff can set quietUntil to stop responding to keys for a bit
+#define quiet() quietUntil = millis() + 200
+  if (millis() < quietUntil) {
+    return;
+  }
+
   display.clearDisplay();
 
   bool alt = pipe.Pressed(7);
 
   // Draw indicator bar
   display.fillRect(126, 0, 2, 32, SSD1306_WHITE);
+  display.setFont(0);
   display.setTextSize(1);
   display.setCursor(0, 0);
 
@@ -238,7 +240,7 @@ void doSetup() {
     // Show settings for each of Chanter, Regulators, Drones
     for (int i = 0; i < 3; i++) {
       int p = patch[i];
-      int16_t x = 0;
+      int16_t x = 1;
       int16_t y = i * 8;
 
       display.setCursor(x, y);
@@ -265,31 +267,71 @@ void doSetup() {
       display.print(Bank[p].name);
     }
   } else {
-    if (pipe.Pressed(6)) {
-      float freq = PITCH_CONCERT_D4 + pitchAdjust;
-      Note note = NearestNote(freq);
 
-      display.setCursor(0, 0);
+    if (pipe.Pressed(6)) {
+      TuningSystem system = tuning.GetTuningSystem();
+      float freq = tuning.GetPitch(NOTE_D4);
+      Note note = NearestNote(freq);
+      int octave = int(note) / 12;
+
+      if (pipe.JustPressed(3) || pipe.JustPressed(2)) {
+        tuning.Setup(NOTE_A4, PITCH_CONCERT_A4, TUNINGSYSTEM_EQUAL);
+        if (pipe.Pressed(3) && pipe.Pressed(2)) {
+          ++system;
+        } else if (pipe.Pressed(3)) {
+          freq = tuning.GetPitch(++note);
+        } else if (pipe.Pressed(2)) {
+          freq = tuning.GetPitch(--note);
+        }
+        tuning.Setup(NOTE_D4, freq, system);
+      }
+
+      if (pipe.Pressed(1) || pipe.Pressed(0)) {
+        if (pipe.Pressed(1) && pipe.Pressed(0)) {
+          freq = PITCH_CONCERT_D4;
+          quiet();
+        } else if (pipe.Pressed(1)) {
+          freq *= 1.001;
+        } else if (pipe.Pressed(0)) {
+          freq /= 1.001;
+        }
+        tuning.Setup(NOTE_D4, freq);
+        note = NearestNote(freq);
+      }
+
+      display.setFont(&FreeSans9pt7b);
+      display.setCursor(0, 12);
       display.print(NoteName(note));
-      display.setCursor(6 + 6, 0);
+      display.print(octave);
+      display.setCursor(48, 12);
       display.print(freq);
+
+      display.setCursor(0, 27);
+      display.print(TuningSystemName(system));
     } else if (pipe.Pressed(5)) {
       display.print("fn2");
     } else if (pipe.Pressed(4)) {
       display.print("fn3");
     } else {
-      display.setCursor(56, 8);
-      display.setTextSize(2);
+      display.setFont(&FreeSans9pt7b);
+      display.setCursor(64, 18);
       display.print("Setup");
+
+      display.setFont();
+      display.setTextSize(1);
+      display.setCursor(0, 16);
+      display.print("build");
+      display.setCursor(0, 24);
+      display.print(buildDate);
     }
   }
 
   display.display();
 }
 
-void doPlay() {
+void doPlay(bool forceUpdate) {
   static uint8_t last_note = 0;
-  bool updateDisplay = false;
+  bool updateDisplay = forceUpdate;
 
   if (pipe.silent) {
     Chanter.NoteOff();
@@ -332,18 +374,15 @@ void doPlay() {
 
   if (updateDisplay) {
     display.clearDisplay();
+    display.setFont(&FreeSans9pt7b);
+
+    if (Chanter.patch) {
+      display.setCursor(0, 32);
+      display.print(Chanter.patch->name);
+    }
 
     display.setCursor(0, 16);
-    display.setTextSize(2);
-    display.print(Chanter.patch->name);
-
-    display.setCursor(0, 0);
-    display.setTextSize(2);
     display.print(note_name);
-
-    display.setCursor(40, 0);
-    display.setTextSize(1);
-    display.print(pipe.kneeClosedness);
 
     display.display();
     last_note = pipe.note;
