@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include "tuning.h"
 
-#define NUM_KEYS 12
+#define NUM_KEYS 8
 
 enum Adjust {
   ADJUST_DOWN = -1,
@@ -23,6 +23,7 @@ class Pipe {
   // keys are which keys are being pressed.
   uint16_t keys;
   uint16_t keysLast;
+  float keyOpen[NUM_KEYS];
 
   // note holds the note being played, according to the fingering chart.
   Note note;

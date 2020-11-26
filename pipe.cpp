@@ -47,20 +47,26 @@ void Pipe::Update() {
   // 0x6c is actually 8 bytes, but all 8 are always the same...
   paj7620ReadReg(0x6c, 1, &kneeClosedness);
 
-  for (int i = 0; i < NUM_KEYS; i++) {
+  for (int i = 0; i < NUM_KEYS; ++i) {
     uint16_t val = max(capSensor.filteredData(i), CLOSEDVAL);
-    float openness = ((val - CLOSEDVAL) / float(GLISSANDO_STEPS));
+    keyOpen[i] = ((val - CLOSEDVAL) / float(GLISSANDO_STEPS));
 
     // keys = all keys which are at least touched
     // glissandoKeys = all keys which are fully closed
     // The glissando operation computes the difference.
-    if (openness < 1.0) {
-      glissandoOpenness = max(glissandoOpenness, openness);
+    if (keyOpen[i] < 1.0) {
+      glissandoOpenness = max(glissandoOpenness, keyOpen[i]);
       bitSet(keys, i);
     }
-    if (openness == 0.0) {
+    if (keyOpen[i] == 0.0) {
       bitSet(glissandoKeys, i);
     }
+  }
+
+  // Compute glissando amount
+  glissandoOpenness = 0.0;
+  for (int i = 0; i < 8; ++i) {
+    glissandoOpenness = max(glissandoOpenness, keyOpen[i]);
   }
 
   // Look up notes in the big table

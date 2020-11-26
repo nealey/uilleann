@@ -51,6 +51,7 @@ void doPlay(bool forceDisplayUpdate) {
     updateDisplay = true;
   }
 
+  diag("%d %f", pipe.keys, pipe.glissandoOpenness);
 #if 0
   if (updateDisplay) {
     // Look up the note name
