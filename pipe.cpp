@@ -2,8 +2,6 @@
 #include "fingering.h"
 #include "tuning.h"
 
-// Kludge time: this is something I did just to make my breadboard look nicer.
-#define KEY_OFFSET 2
 
 #define CLOSEDVAL 0x30
 #define OPENVAL 0x70
@@ -35,6 +33,9 @@ bool Pipe::Init() {
 void Pipe::Update() {
   uint8_t glissandoKeys = 0;
 
+  keysLast = keys;
+  keys = 0;
+
   // Read the bag state, if there's a bag.
   // if there isn't a bag, don't try, or this library will crash the program.
   if (bag_enabled) {
@@ -46,11 +47,8 @@ void Pipe::Update() {
   // 0x6c is actually 8 bytes, but all 8 are always the same...
   paj7620ReadReg(0x6c, 1, &kneeClosedness);
 
-  keysLast = keys;
-  keys = 0;
-  glissandoKeys = 0;
-  for (int i = 0; i < 8; i++) {
-    uint16_t val = max(capSensor.filteredData(i + KEY_OFFSET), CLOSEDVAL);
+  for (int i = 0; i < NUM_KEYS; i++) {
+    uint16_t val = max(capSensor.filteredData(i), CLOSEDVAL);
     float openness = ((val - CLOSEDVAL) / float(GLISSANDO_STEPS));
 
     // keys = all keys which are at least touched
@@ -66,8 +64,8 @@ void Pipe::Update() {
   }
 
   // Look up notes in the big table
-  struct Fingering f = uilleann_matrix[keys];
-  struct Fingering gf = uilleann_matrix[glissandoKeys];
+  struct Fingering f = FingeredNote(keys);
+  struct Fingering gf = FingeredNote(glissandoKeys);
 
   note = f.note;
   glissandoNote = gf.note;
@@ -95,4 +93,41 @@ bool Pipe::JustPressed(uint8_t key) {
     return !bitRead(keysLast, key);
   }
   return false;
+}
+
+bool Pipe::typematicEvent(uint8_t key, uint16_t delay, uint16_t repeat) {
+  if (Pressed(key)) {
+    unsigned long now = millis();
+
+    if (JustPressed(key)) {
+      nextRepeat[key] = now + max(delay, repeat);
+      return true;
+    }
+    if (now >= nextRepeat[key]) {
+      nextRepeat[key] = now + repeat;
+      return true;
+    }
+  }
+  return false;
+}
+
+Adjust Pipe::ReadAdjust(uint8_t keyUp, uint8_t keyDown, uint16_t delay, uint16_t repeat) {
+  bool eventUp = typematicEvent(keyUp, delay, repeat);
+  bool eventDown = typematicEvent(keyDown, delay, repeat);
+
+  if (Pressed(keyUp) && Pressed(keyDown)) {
+    unsigned long nr = max(nextRepeat[keyUp], nextRepeat[keyDown]);
+
+    nextRepeat[keyUp] = nr;
+    nextRepeat[keyDown] = nr;
+  }
+
+  if (eventUp && eventDown) {
+    return ADJUST_BOTH;
+  } else if (eventUp) {
+    return ADJUST_UP;
+  } else if (eventDown) {
+    return ADJUST_DOWN;
+  }
+  return ADJUST_NONE;
 }

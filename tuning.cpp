@@ -125,6 +125,10 @@ const char *NoteName(Note note) {
   return noteNames[note % 12];
 }
 
+int NoteOctave(Note note) {
+  return int(note / NOTE_OCTAVE);
+}
+
 const char *TuningSystemName(TuningSystem system) {
   switch (system) {
     case TUNINGSYSTEM_EQUAL:

@@ -12,7 +12,9 @@
 #include "synth.h"
 #include "tuning.h"
 
-#if defined(ADAFRUIT_TRELLIS_M4_EXPRESS)
+const char *buildDate = __DATE__;
+
+#if defined(ADAFRUIT_TRELLIS_MAdafruit_SSD1306EXPRESS)
 #include <Adafruit_NeoTrellisM4.h>
 Adafruit_NeoTrellisM4 trellis;  // = Adafruit_NeoTrellisM4();
 #endif
@@ -25,13 +27,13 @@ Adafruit_SSD1306 display(128, 32, &Wire, -1);
 // Settings
 uint8_t patch[4] = {0};
 float volume[4] = {0};
-const char *settingNames[4] = {"c", "r", "d", "*"};
-const char *buildDate = __DATE__;
 
 // Pipes
+#define NUM_DRONES 3
+#define NUM_REGULATORS 3
 FMVoice Chanter;
-FMVoice Drones[3];
-FMVoice Regulators[3];
+FMVoice Drones[NUM_DRONES];
+FMVoice Regulators[NUM_REGULATORS];
 
 AudioFilterBiquad biquad1;
 AudioMixer4 mixDrones;
@@ -103,6 +105,7 @@ void diag(const char *fmt, ...) {
   display.clearDisplay();
   display.drawRect(124, 16, 4, 16, SSD1306_WHITE);
   display.setTextColor(SSD1306_WHITE);
+  display.setFont();
   display.setTextSize(1);
 
   display.setCursor(56, 24);
@@ -121,6 +124,13 @@ void diag(const char *fmt, ...) {
   display.display();
 }
 
+// The right way to do this would be to make a Uilleann object,
+// and pass that around.
+// The Auido library makes this sort of a pain,
+// and honestly, is anybody other than me going to use this?
+#include "main-play.h"
+#include "main-setup.h"
+
 void setup() {
   // Initialize settings
   // XXX: Read these from persistent storage later
@@ -129,16 +139,18 @@ void setup() {
     volume[i] = 0.75;
   }
 
-  Wire.begin();
-
   // PREPARE TO BLINK
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, true);
+
+  // Set up I2C. Apparently this needs a bit of startup delay.
+  Wire.begin();
 
   // Initialize display
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3c)) {
     blink(true);
   }
+  digitalWrite(LED_BUILTIN, false);
   diag("Hello!");
 
 #if defined(ADAFRUIT_TRELLIS_M4_EXPRESS)
@@ -153,37 +165,62 @@ void setup() {
   }
 
   diag("Audio...");
-  // Set aside some memory for the audio library
   AudioMemory(20);
-
-  // Set up the SGTL5000 using I2C
+  AudioProcessorUsageMaxReset();
+  AudioMemoryUsageMaxReset();
   sgtl5000.enable();
   sgtl5000.volume(0.3);
 
-  // Initialize processor and memory measurements
-  AudioProcessorUsageMaxReset();
-  AudioMemoryUsageMaxReset();
+  diag("Synth...");
+  loadPatch(0);
+  loadPatch(1);
+  loadPatch(2);
 
-  diag("Drones...");
-  // Turn on drones
-  for (int i = 0; i < 3; i++) {
-    Note note = NOTE_D4 - (NOTE_OCTAVE * i);
-    float pitch = tuning.GetPitch(note) * (0.01 * (i - 1));  // Detune just a touch
-    Drones[i].LoadPatch(&Bank[0]);
-    Drones[i].NoteOn(pitch);
-  }
-
+  diag("Mixer...");
   // Turn on all mixer channels
   for (int i = 0; i < 4; i++) {
-    mixL.gain(i, 0.5);
-    mixR.gain(i, 0.6);
+    mixL.gain(i, volume[i]);
+    mixR.gain(i, volume[i]);
   }
+  for (int i = 0; i < NUM_REGULATORS; ++i) {
+    mixRegulators.gain(i, 1);
+  }
+  for (int i = 0; i < NUM_DRONES; ++i) {
+    mixDrones.gain(i, 1);
+  }
+  biquad1.setBandpass(0, PITCH_CONCERT_A4, 1.0);
+
+  diag("Drones...");
+  playDrones();
 
   diag("Done!");
 }
 
+void loadPatch(uint8_t where) {
+  FMPatch *p = &Bank[where];
+
+  switch (where) {
+    case 0:
+      Chanter.LoadPatch(p);
+      break;
+    case 1:
+      for (int i = 0; i < NUM_REGULATORS; ++i) {
+        Regulators[i].LoadPatch(p);
+      }
+      break;
+    case 2:
+      for (int i = 0; i < NUM_DRONES; ++i) {
+        Drones[i].LoadPatch(p);
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+
 void loop() {
-  static bool forceDisplayUpdate = true;
+  static bool upSetting = false;  // GET IT?
 
   pipe.Update();
 
@@ -192,199 +229,21 @@ void loop() {
 #endif
 
   // If we're infinitely (for the sensor) off the knee,
-  // go into setup mode!
+  // we might be in setup mode.
   if (pipe.kneeClosedness == 0) {
-    doSetup();
-    forceDisplayUpdate = true;
-  } else {
-    doPlay(forceDisplayUpdate);
-    forceDisplayUpdate = false;
-  }
-}
-
-/** doSetup performs "setup mode" behavior for the pipe.
- *
- * Setup mode sets the following new meanings to the buttons:
- *
- *  key: function [alternate]
- * C♯:  Alt
- * B♮: Chanter
- * A♮: Regulators
- * G♮: Drones
- * F♯: Up [+ coarse]
- * E♮: Down [- coarse]
- * E♭: + [+ fine]
- * D♮: - [- fine]
- *
- */
-void doSetup() {
-  static unsigned long quietUntil = 0;
-
-  // Stuff can set quietUntil to stop responding to keys for a bit
-#define quiet() quietUntil = millis() + 200
-  if (millis() < quietUntil) {
-    return;
-  }
-
-  display.clearDisplay();
-
-  bool alt = pipe.Pressed(7);
-
-  // Draw indicator bar
-  display.fillRect(126, 0, 2, 32, SSD1306_WHITE);
-  display.setFont(0);
-  display.setTextSize(1);
-  display.setCursor(0, 0);
-
-  if (alt) {
-    // Show settings for each of Chanter, Regulators, Drones
-    for (int i = 0; i < 3; i++) {
-      int p = patch[i];
-      int16_t x = 1;
-      int16_t y = i * 8;
-
-      display.setCursor(x, y);
-      if (pipe.Pressed(6 - i)) {
-        display.fillRect(x - 1, y, 8, 8, SSD1306_WHITE);
-        display.setTextColor(SSD1306_BLACK);
-      } else {
-        display.setTextColor(SSD1306_WHITE);
-      }
-      display.print(settingNames[i]);
-      x += 7;
-
-      display.drawRect(x, y + 2, 32, 4, SSD1306_WHITE);
-      display.fillRect(x, y + 2, 32 * volume[i], 4, SSD1306_WHITE);
-
-      x += 34;
-      display.setTextColor(SSD1306_WHITE);
-      display.setCursor(x, y);
-      if (p < 10) {
-        display.print(" ");
-      }
-      display.print(p);
-      display.print(" ");
-      display.print(Bank[p].name);
-    }
-  } else {
-
-    if (pipe.Pressed(6)) {
-      TuningSystem system = tuning.GetTuningSystem();
-      float freq = tuning.GetPitch(NOTE_D4);
-      Note note = NearestNote(freq);
-      int octave = int(note) / 12;
-
-      if (pipe.JustPressed(3) || pipe.JustPressed(2)) {
-        tuning.Setup(NOTE_A4, PITCH_CONCERT_A4, TUNINGSYSTEM_EQUAL);
-        if (pipe.Pressed(3) && pipe.Pressed(2)) {
-          ++system;
-        } else if (pipe.Pressed(3)) {
-          freq = tuning.GetPitch(++note);
-        } else if (pipe.Pressed(2)) {
-          freq = tuning.GetPitch(--note);
-        }
-        tuning.Setup(NOTE_D4, freq, system);
-      }
-
-      if (pipe.Pressed(1) || pipe.Pressed(0)) {
-        if (pipe.Pressed(1) && pipe.Pressed(0)) {
-          freq = PITCH_CONCERT_D4;
-          quiet();
-        } else if (pipe.Pressed(1)) {
-          freq *= 1.001;
-        } else if (pipe.Pressed(0)) {
-          freq /= 1.001;
-        }
-        tuning.Setup(NOTE_D4, freq);
-        note = NearestNote(freq);
-      }
-
-      display.setFont(&FreeSans9pt7b);
-      display.setCursor(0, 12);
-      display.print(NoteName(note));
-      display.print(octave);
-      display.setCursor(48, 12);
-      display.print(freq);
-
-      display.setCursor(0, 27);
-      display.print(TuningSystemName(system));
-    } else if (pipe.Pressed(5)) {
-      display.print("fn2");
-    } else if (pipe.Pressed(4)) {
-      display.print("fn3");
-    } else {
-      display.setFont(&FreeSans9pt7b);
-      display.setCursor(64, 18);
-      display.print("Setup");
-
-      display.setFont();
-      display.setTextSize(1);
-      display.setCursor(0, 16);
-      display.print("build");
-      display.setCursor(0, 24);
-      display.print(buildDate);
+    // We only enter into setup mode if no keys are pressed.
+    // This hopefully avoids accidentally entering setup while playing.
+    // Like say you're playing a jaunty tune and suddenly there's an earthquake.
+    // You ought to be able to finish the tune off before your pipe goes into setup mode.
+    if (upSetting || (pipe.keys == 0)) {
+      doSetup();
+      upSetting = true;
+      return;
     }
   }
 
-  display.display();
-}
-
-void doPlay(bool forceUpdate) {
-  static uint8_t last_note = 0;
-  bool updateDisplay = forceUpdate;
-
-  if (pipe.silent) {
-    Chanter.NoteOff();
-  } else {
-    // Calculate pitch, and glissando pitch
-    uint16_t pitch = tuning.GetPitch(pipe.note);
-    uint16_t glissandoPitch = tuning.GetPitch(pipe.glissandoNote);
-
-    // Bend pitch if fewer than 3 half steps away
-    if (abs(pipe.glissandoNote - pipe.note) < 3) {
-      float diff = glissandoPitch - pitch;
-      pitch += diff * pipe.glissandoOpenness;
-    }
-
-    // Apply a low shelf filter if this is the alternate fingering
-    if (pipe.altFingering) {
-      biquad1.setLowShelf(0, 2000, 0.2, 1);
-    } else {
-      biquad1.setHighShelf(0, 1000, 1.0, 1);
-    }
-
-    // We've figured out what pitch to play, now we can play it.
-    if (Chanter.playing) {
-      Chanter.SetPitch(pitch);
-    } else {
-      Chanter.NoteOn(pitch);
-    }
-  }
-
-  // Look up the note name
-  const char *note_name = NoteName(pipe.note);
-  if (pipe.silent) {
-    note_name = "--";
-    updateDisplay = true;
-  }
-
-  if (pipe.note != last_note) {
-    updateDisplay = true;
-  }
-
-  if (updateDisplay) {
-    display.clearDisplay();
-    display.setFont(&FreeSans9pt7b);
-
-    if (Chanter.patch) {
-      display.setCursor(0, 32);
-      display.print(Chanter.patch->name);
-    }
-
-    display.setCursor(0, 16);
-    display.print(note_name);
-
-    display.display();
-    last_note = pipe.note;
-  }
+  diag("Play!");
+  doPlay(pipe, display, upSetting);
+  upSetting = false;
+  diag("Done!");
 }

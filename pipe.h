@@ -6,14 +6,23 @@
 #include <stdint.h>
 #include "tuning.h"
 
+#define NUM_KEYS 12
+
+enum Adjust {
+  ADJUST_DOWN = -1,
+  ADJUST_NONE = 0,
+  ADJUST_UP = 1,
+  ADJUST_BOTH,
+};
+
 class Pipe {
  public:
   // kneeClosedness indicates how "closed" the knee sensor is. 0 = wide open.
   uint8_t kneeClosedness;
 
   // keys are which keys are being pressed.
-  uint8_t keys;
-  uint8_t keysLast;
+  uint16_t keys;
+  uint16_t keysLast;
 
   // note holds the note being played, according to the fingering chart.
   Note note;
@@ -52,8 +61,16 @@ class Pipe {
   // JustPressed returns whether the given key was just pressed.
   bool JustPressed(uint8_t key);
 
+  // ReadAdjust returns the input for two keys paired as up/down.
+  //
+  // delay is the number of milliseconds to wait before repeating a key
+  // repeat is the number of milliseconds to wait between repeated keystrokes
+  Adjust ReadAdjust(uint8_t upKey, uint8_t downKey, uint16_t delay, uint16_t repeat);
+
  private:
   Adafruit_MPR121 capSensor;
   QwiicButton bagSensor;
   bool bag_enabled;
+  unsigned long nextRepeat[NUM_KEYS];
+  bool typematicEvent(uint8_t key, uint16_t delay, uint16_t repeat);
 };

@@ -2,6 +2,10 @@
 #include "synth_waveform.h"
 
 void FMVoice::LoadPatch(FMPatch *p) {
+  bool playing = this->playing;
+  float pitch = this->pitch;
+
+  NoteOff();
   for (int i=0; i<NUM_OPERATORS; i++) {
     FMOperator op = p->operators[i];
 
@@ -22,6 +26,9 @@ void FMVoice::LoadPatch(FMPatch *p) {
     this->outputMixer.gain(i, p->gains[i][NUM_OPERATORS]);
   }
   this->patch = p;
+  if (playing) {
+    NoteOn(pitch);
+  }
 }
 
 void FMVoice::SetPitch(float freq) {
@@ -29,6 +36,7 @@ void FMVoice::SetPitch(float freq) {
     FMOperator op = this->patch->operators[i];
     this->oscillators[i].frequency(op.offset + (freq * op.multiplier));
   }
+  this->pitch = freq;
 }
 
 void FMVoice::NoteOn(float freq) {

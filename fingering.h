@@ -11,14 +11,14 @@ struct Fingering {
 #define P(note) \
   { note, true }
 
-#define CCCC n(NOTE_CS5), n(NOTE_CS5), n(NOTE_CS5), n(NOTE_CS5)
-#define CCDD n(NOTE_CS5), n(NOTE_CS5), n(NOTE_D5), n(NOTE_D5)
-#define CDCD n(NOTE_CS5), n(NOTE_D5), n(NOTE_CS5), n(NOTE_D5)
+#define CCCC n(NOTE_Cs5), n(NOTE_Cs5), n(NOTE_Cs5), n(NOTE_Cs5)
+#define CCDD n(NOTE_Cs5), n(NOTE_Cs5), n(NOTE_D5), n(NOTE_D5)
+#define CDCD n(NOTE_Cs5), n(NOTE_D5), n(NOTE_Cs5), n(NOTE_D5)
 #define DDDD n(NOTE_D5), n(NOTE_D5), n(NOTE_D5), n(NOTE_D5)
 
 struct Fingering uilleann_matrix[] = {
     // Open Back D
-    n(NOTE_CS5), n(NOTE_CS5), n(NOTE_CS5), n(NOTE_D5),  // OOO OO..
+    n(NOTE_Cs5), n(NOTE_Cs5), n(NOTE_Cs5), n(NOTE_D5),  // OOO OO..
     CCDD,                                               // OOO OX..
     CDCD,                                               // OOO XO..
     DDDD,                                               // OOO XX..
@@ -53,24 +53,24 @@ struct Fingering uilleann_matrix[] = {
 
     // Closed Back D
     CCCC,                                                // OOO OO...
-    n(NOTE_CS5), n(NOTE_CS5), n(NOTE_CS5), P(NOTE_CS5),  // OOO OX..
+    n(NOTE_Cs5), n(NOTE_Cs5), n(NOTE_Cs5), P(NOTE_Cs5),  // OOO OX..
     CCCC,                                                // OOO XO..
     CCCC,                                                // OOO XX..
     CCCC,                                                // OOX OO..
-    n(NOTE_CS5), P(NOTE_CS5), n(NOTE_CS5), P(NOTE_CS5),  // OOX OX..
+    n(NOTE_Cs5), P(NOTE_Cs5), n(NOTE_Cs5), P(NOTE_Cs5),  // OOX OX..
     CCCC,                                                // OOX XO..
     CCCC,                                                // OOX XX..
     CCCC,                                                // OXO OO..
-    n(NOTE_CS5), P(NOTE_CS5), n(NOTE_CS5), P(NOTE_CS5),  // OXO OX..
+    n(NOTE_Cs5), P(NOTE_Cs5), n(NOTE_Cs5), P(NOTE_Cs5),  // OXO OX..
     CCCC,                                                // OXO XO..
     CCCC,                                                // OXO XX..
     P(NOTE_C5), P(NOTE_C5), P(NOTE_C5), P(NOTE_C5),      // OXX OO..
     n(NOTE_C5), n(NOTE_C5), n(NOTE_C5), n(NOTE_C5),      // OXX OX..
     n(NOTE_C5), n(NOTE_C5), n(NOTE_C5), P(NOTE_C5),      // OXX XO..
-    n(NOTE_C5), n(NOTE_C5), n(NOTE_C5), n(NOTE_CS5),     // OXX XX..
+    n(NOTE_C5), n(NOTE_C5), n(NOTE_C5), n(NOTE_Cs5),     // OXX XX..
     n(NOTE_B4), n(NOTE_B4), n(NOTE_B4), n(NOTE_B4),      // XOO OO..
     P(NOTE_B4), P(NOTE_B4), n(NOTE_B4), P(NOTE_B4),      // XOO OX..
-    n(NOTE_AS4), n(NOTE_B4), n(NOTE_AS4), n(NOTE_B4),    // XOO XO..
+    n(NOTE_As4), n(NOTE_B4), n(NOTE_As4), n(NOTE_B4),    // XOO XO..
     n(NOTE_B4), n(NOTE_B4), n(NOTE_B4), n(NOTE_B4),      // XOO XX..
     P(NOTE_B4), P(NOTE_B4), P(NOTE_B4), P(NOTE_B4),      // XOX OO..
     P(NOTE_B4), P(NOTE_B4), P(NOTE_B4), P(NOTE_B4),      // XOX OX..
@@ -78,10 +78,14 @@ struct Fingering uilleann_matrix[] = {
     P(NOTE_B4), P(NOTE_B4), P(NOTE_B4), P(NOTE_B4),      // XOX XX..
     n(NOTE_A4), n(NOTE_A4), P(NOTE_A4), n(NOTE_A4),      // XXO OO..
     P(NOTE_A4), P(NOTE_A4), P(NOTE_A4), P(NOTE_A4),      // XXO OX..
-    n(NOTE_GS4), P(NOTE_GS4), n(NOTE_A4), n(NOTE_A4),    // XXO XO..
+    n(NOTE_Gs4), P(NOTE_Gs4), n(NOTE_A4), n(NOTE_A4),    // XXO XO..
     P(NOTE_A4), P(NOTE_A4), P(NOTE_A4), n(NOTE_A4),      // XXO XX..
     n(NOTE_G4), n(NOTE_G4), P(NOTE_G4), n(NOTE_G4),      // XXX OO..
     P(NOTE_G4), P(NOTE_G4), P(NOTE_G4), P(NOTE_G4),      // XXX OX..
-    n(NOTE_FS4), n(NOTE_FS4), n(NOTE_F4), P(NOTE_FS4),   // XXX XO..
-    n(NOTE_E4), P(NOTE_E4), n(NOTE_DS4), n(NOTE_D4),     // XXX XX..
+    n(NOTE_Fs4), n(NOTE_Fs4), n(NOTE_F4), P(NOTE_Fs4),   // XXX XO..
+    n(NOTE_E4), P(NOTE_E4), n(NOTE_Ds4), n(NOTE_D4),     // XXX XX..
 };
+
+inline Fingering FingeredNote(uint16_t keys) {
+  return uilleann_matrix[keys & 0xff];
+}

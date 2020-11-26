@@ -72,6 +72,9 @@ class Tuning {
 // NearestNote returns the note nearest to pitch.
 Note NearestNote(float pitch);
 
+// NoteOctave returns which octave the note is in
+int NoteOctave(Note note);
+
 // NoteName returns the name of a note (without octave).
 const char *NoteName(Note note);
 
@@ -88,8 +91,14 @@ inline Note toNote(int a) {
     return Note(a);
   }
 }
+inline Note operator+(const Note &a, const int b) {
+  return toNote(int(a) + b);
+}
 inline Note operator+(const Note &a, const Note b) {
-  return toNote(int(a) + int(b));
+  return a + int(b);
+}
+inline Note &operator+=(Note &a, const int b) {
+  return a = a + b;
 }
 inline Note &operator+=(Note &a, const Note b) {
   return a = a + b;

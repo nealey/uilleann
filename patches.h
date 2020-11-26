@@ -61,3 +61,5 @@ FMPatch Bank[] = {
     },
   },
 };
+
+const int PATCH_MAX = sizeof(Bank) / sizeof(Bank[0]);

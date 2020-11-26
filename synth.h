@@ -94,6 +94,10 @@ class FMVoice {
      */
     void SetPitch(float pitch);
 
+    /** GetPitch returns the pitch (Hz) of a voice.
+     */
+    float GetPitch();
+
     /** SetModulation sets the modulation amount of a voice.
      * 
      * What this means depends on the loaded patch.
@@ -126,6 +130,7 @@ class FMVoice {
     AudioEffectEnvelope envelopes[NUM_OPERATORS];
     AudioMixer4 outputMixer;
     FMPatch *patch;
+    float pitch;
     bool playing;
 };
 
