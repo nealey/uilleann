@@ -140,7 +140,7 @@ void setupInfo() {
   display.setFont();
   display.setTextSize(1);
   display.setCursor(0, 16);
-  display.print("build");
+  display.print("FC-1");
   display.setCursor(0, 24);
   display.print(buildDate);
 }

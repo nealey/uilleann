@@ -194,6 +194,7 @@ void setup() {
   playDrones();
 
   diag("Done!");
+  display.dim(true);
 }
 
 void loadPatch(uint8_t where) {
@@ -220,7 +221,7 @@ void loadPatch(uint8_t where) {
 
 
 void loop() {
-  static bool upSetting = false;  // GET IT?
+  static bool upSetting = true;  // GET IT?
 
   pipe.Update();
 
@@ -242,8 +243,6 @@ void loop() {
     }
   }
 
-  diag("Play!");
-  doPlay(pipe, display, upSetting);
+  doPlay(upSetting);
   upSetting = false;
-  diag("Done!");
 }

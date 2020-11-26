@@ -9,26 +9,29 @@ void playDrones() {
   }
 }
 
-void doPlay(Pipe pipe, Adafruit_SSD1306 display, bool forceDisplayUpdate) {
+void doPlay(bool forceDisplayUpdate) {
   static Note last_note = NOTE_ZERO;
   bool updateDisplay = forceDisplayUpdate;
 
-  diag("silent?");
+  if (updateDisplay) {
+    display.clearDisplay();
+    display.fillRect(0, 0, 2, 2, SSD1306_WHITE);
+    display.display();
+  }
+
   if (pipe.silent) {
     Chanter.NoteOff();
   } else {
     // Calculate pitch, and glissando pitch
-    uint16_t pitch = tuning.GetPitch(pipe.note);
-    uint16_t glissandoPitch = tuning.GetPitch(pipe.glissandoNote);
+    float pitch = tuning.GetPitch(pipe.note);
+    float glissandoPitch = tuning.GetPitch(pipe.glissandoNote);
 
-    diag("bend");
     // Bend pitch if fewer than 3 half steps away
     if (abs(pipe.glissandoNote - pipe.note) < 3) {
       float diff = glissandoPitch - pitch;
       pitch += diff * pipe.glissandoOpenness;
     }
 
-    diag("shelf");
     // Apply a low shelf filter if this is the alternate fingering
     if (pipe.altFingering) {
       biquad1.setLowShelf(0, 2000, 0.2, 1);
@@ -44,12 +47,11 @@ void doPlay(Pipe pipe, Adafruit_SSD1306 display, bool forceDisplayUpdate) {
     }
   }
 
-  diag("check last note");
   if (pipe.note != last_note) {
     updateDisplay = true;
   }
 
-  diag("update display");
+#if 0
   if (updateDisplay) {
     // Look up the note name
     const char *note_name = NoteName(pipe.note);
@@ -65,7 +67,7 @@ void doPlay(Pipe pipe, Adafruit_SSD1306 display, bool forceDisplayUpdate) {
     display.print(note_name);
 
     display.display();
-    //last_note = pipe.note;
+    last_note = pipe.note;
   }
-  diag("play done");
+#endif
 }
