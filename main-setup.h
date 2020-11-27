@@ -4,8 +4,6 @@
 #define ADJ_TYPEMATIC_DELAY 500
 #define ADJ_TYPEMATIC_REPEAT 33
 
-#define VOLUME_INITIAL 0.8
-
 const char *settingNames[4] = {"c", "r", "d", "*"};
 
 // quellUntil can be set to give the user time to get their fingers off the continuous adjustment buttons.
@@ -38,7 +36,7 @@ void setupVolume() {
         case ADJUST_DOWN:
           {
             float vol = volume[i] + float(volAdjust)*0.02;
-            volume[i] = min(max(vol, 1.0), 0.0);
+            volume[i] = max(min(vol, 1.0), 0.0);
           }
           break;
         default:

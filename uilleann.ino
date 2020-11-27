@@ -22,8 +22,9 @@ Tuning tuning = Tuning(NOTE_D4, PITCH_CONCERT_D4, TUNINGSYSTEM_JUST);
 Adafruit_SSD1306 display(128, 32, &Wire, -1);
 
 // Settings
+#define VOLUME_INITIAL 0.8
 uint8_t patch[4] = {0};
-float volume[5] = {0.8, 0.8, 0.8, 0.8, 0.5};
+float volume[5] = {VOLUME_INITIAL, VOLUME_INITIAL, VOLUME_INITIAL, VOLUME_INITIAL, 0.5};
 
 // Pipes
 #define NUM_DRONES 3
