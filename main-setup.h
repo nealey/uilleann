@@ -36,7 +36,10 @@ void setupVolume() {
           break;
         case ADJUST_UP:
         case ADJUST_DOWN:
-          volume[i] += float(volAdjust)*0.02;
+          {
+            float vol = volume[i] + float(volAdjust)*0.02;
+            volume[i] = min(max(vol, 1.0), 0.0);
+          }
           break;
         default:
           break;
@@ -143,6 +146,9 @@ void setupInfo() {
   display.print("FC-1");
   display.setCursor(0, 24);
   display.print(buildDate);
+  display.setCursor(0, 0);
+  display.print("M:");
+  display.print(AudioMemoryUsageMax());
 }
 
 /** doSetup performs "setup mode" behavior for the pipe.

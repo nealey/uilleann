@@ -1,10 +1,7 @@
 #include <Adafruit_GFX.h>
-#include <Adafruit_MPR121.h>
 #include <Adafruit_SSD1306.h>
 #include <Audio.h>
 #include <Fonts/FreeSans9pt7b.h>
-#include <Wire.h>
-#include <paj7620.h>
 #include <stdio.h>
 
 #include "patches.h"
@@ -26,7 +23,7 @@ Adafruit_SSD1306 display(128, 32, &Wire, -1);
 
 // Settings
 uint8_t patch[4] = {0};
-float volume[4] = {0};
+float volume[5] = {0.75, 0.75, 0.75, 0.75, 0.3};
 
 // Pipes
 #define NUM_DRONES 3
@@ -132,13 +129,6 @@ void diag(const char *fmt, ...) {
 #include "main-setup.h"
 
 void setup() {
-  // Initialize settings
-  // XXX: Read these from persistent storage later
-  for (int i = 0; i < 4; i++) {
-    patch[i] = 0;
-    volume[i] = 0.75;
-  }
-
   // PREPARE TO BLINK
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, true);
@@ -160,16 +150,16 @@ void setup() {
 
   diag("Pipe...");
   while (!pipe.Init()) {
-    diag("No pipe. Is it connected?");
+    diag("Pipe connected?");
     blink(false);
   }
 
   diag("Audio...");
-  AudioMemory(20);
+  AudioMemory(120);
   AudioProcessorUsageMaxReset();
   AudioMemoryUsageMaxReset();
   sgtl5000.enable();
-  sgtl5000.volume(0.3);
+  sgtl5000.volume(volume[4]);
 
   diag("Synth...");
   loadPatch(0);
@@ -188,7 +178,7 @@ void setup() {
   for (int i = 0; i < NUM_DRONES; ++i) {
     mixDrones.gain(i, 1);
   }
-  biquad1.setBandpass(0, PITCH_CONCERT_A4, 1.0);
+  biquad1.setNotch(0, PITCH_CONCERT_A4, 0.001);
 
   diag("Drones...");
   playDrones();
@@ -231,12 +221,12 @@ void loop() {
 
   // If we're infinitely (for the sensor) off the knee,
   // we might be in setup mode.
-  if (pipe.kneeClosedness == 0) {
+  if (pipe.KneeClosedness == 0) {
     // We only enter into setup mode if no keys are pressed.
     // This hopefully avoids accidentally entering setup while playing.
     // Like say you're playing a jaunty tune and suddenly there's an earthquake.
     // You ought to be able to finish the tune off before your pipe goes into setup mode.
-    if (upSetting || (pipe.keys == 0)) {
+    if (upSetting || (pipe.Keys == 0)) {
       doSetup();
       upSetting = true;
       return;

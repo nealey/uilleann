@@ -1,12 +1,12 @@
 #pragma once
 
 #include <Adafruit_MPR121.h>
+#include <Adafruit_VL6180X.h>
 #include <SparkFun_Qwiic_Button.h>
-#include <paj7620.h>
 #include <stdint.h>
 #include "tuning.h"
 
-#define NUM_KEYS 8
+#define NUM_KEYS 12
 
 enum Adjust {
   ADJUST_DOWN = -1,
@@ -18,31 +18,31 @@ enum Adjust {
 class Pipe {
  public:
   // kneeClosedness indicates how "closed" the knee sensor is. 0 = wide open.
-  uint8_t kneeClosedness;
+  uint8_t KneeClosedness;
 
   // keys are which keys are being pressed.
-  uint16_t keys;
-  uint16_t keysLast;
-  float keyOpen[NUM_KEYS];
+  uint16_t Keys;
+  uint16_t KeysLast;
+  float KeyPressure[NUM_KEYS];
 
   // note holds the note being played, according to the fingering chart.
-  Note note;
+  Note CurrentNote;
 
   // glissandoNote is the note that would be played if partially open keys were fully open.
-  Note glissandoNote;
+  Note GlissandoNote;
 
-  // glissandoOpenness is how "open" the holes are in the direction of the glissandoNote.
-  float glissandoOpenness;
+  // glissandoPressure is how "closed" the holes are in the direction away from the glissandoNote.
+  float GlissandoPressure;
 
   // silent is true if all keys and the knee are closed.
-  bool silent;
+  bool Silent;
 
   // bag is true if the bag is being squished.
-  bool bag;
+  bool Bag;
 
   // altFingering is true if the "alternate fingering" is being played.
   // This should sound different than the standard fingering.
-  bool altFingering;
+  bool AltFingering;
 
   Pipe();
 
@@ -70,6 +70,7 @@ class Pipe {
 
  private:
   Adafruit_MPR121 capSensor;
+  Adafruit_VL6180X kneeSensor;
   QwiicButton bagSensor;
   bool bag_enabled;
   unsigned long nextRepeat[NUM_KEYS];
