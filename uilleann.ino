@@ -23,7 +23,7 @@ Adafruit_SSD1306 display(128, 32, &Wire, -1);
 
 // Settings
 uint8_t patch[4] = {0};
-float volume[5] = {0.75, 0.75, 0.75, 0.75, 0.3};
+float volume[5] = {0.8, 0.8, 0.8, 0.8, 0.5};
 
 // Pipes
 #define NUM_DRONES 3
@@ -165,6 +165,7 @@ void setup() {
   loadPatch(0);
   loadPatch(1);
   loadPatch(2);
+  noise.amplitude(1.0);
 
   diag("Mixer...");
   // Turn on all mixer channels
