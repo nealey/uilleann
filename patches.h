@@ -2,6 +2,7 @@
 
 #pragma once
 #include "algorithms.h"
+#include "synth.h"
 
 // Waveform, offset, multiplier, delay, attack, holdAmp, hold, decay, sustainAmp, release
 FMPatch Bank[] = {
@@ -60,3 +61,5 @@ FMPatch Bank[] = {
     },
   },
 };
+
+const int PATCH_MAX = sizeof(Bank) / sizeof(Bank[0]);

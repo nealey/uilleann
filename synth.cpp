@@ -1,47 +1,55 @@
 #include "synth.h"
 #include "synth_waveform.h"
 
-void FMVoiceLoadPatch(FMVoice *v, FMPatch *p) {
+void FMVoice::LoadPatch(FMPatch *p) {
+  bool playing = this->playing;
+  float pitch = this->pitch;
+
+  NoteOff();
   for (int i=0; i<NUM_OPERATORS; i++) {
     FMOperator op = p->operators[i];
 
-    v->oscillators[i].frequencyModulation(1);
-    v->oscillators[i].begin(op.waveform);
-    v->envelopes[i].delay(op.delayTime);
-    v->envelopes[i].attack(op.attackTime);
-    v->oscillators[i].amplitude(op.holdAmplitude);
-    v->envelopes[i].hold(op.holdTime);
-    v->envelopes[i].decay(op.decayTime);
-    v->envelopes[i].sustain(op.sustainAmplitude / op.holdAmplitude);
-    v->envelopes[i].release(op.releaseTime);
+    this->oscillators[i].frequencyModulation(1);
+    this->oscillators[i].begin(op.waveform);
+    this->envelopes[i].delay(op.delayTime);
+    this->envelopes[i].attack(op.attackTime);
+    this->oscillators[i].amplitude(op.holdAmplitude);
+    this->envelopes[i].hold(op.holdTime);
+    this->envelopes[i].decay(op.decayTime);
+    this->envelopes[i].sustain(op.sustainAmplitude / op.holdAmplitude);
+    this->envelopes[i].release(op.releaseTime);
 
     // This feels wasteful 🙁
     for (int j=0; j<NUM_OPERATORS; j++) {
-      v->mixers[i].gain(j, p->gains[i][j]);
+      this->mixers[i].gain(j, p->gains[i][j]);
     }
-    v->outputMixer.gain(i, p->gains[i][NUM_OPERATORS]);
+    this->outputMixer.gain(i, p->gains[i][NUM_OPERATORS]);
   }
-  v->patch = p;
-}
-
-void FMVoiceSetPitch(FMVoice *v, float freq) {
-  for (int i=0; i<4; i++) {
-    FMOperator op = v->patch->operators[i];
-    v->oscillators[i].frequency(op.offset + (freq * op.multiplier));
+  this->patch = p;
+  if (playing) {
+    NoteOn(pitch);
   }
 }
 
-void FMVoiceNoteOn(FMVoice *v, float freq) {
-  FMVoiceSetPitch(v, freq);
+void FMVoice::SetPitch(float freq) {
   for (int i=0; i<4; i++) {
-    v->envelopes[i].noteOn();
+    FMOperator op = this->patch->operators[i];
+    this->oscillators[i].frequency(op.offset + (freq * op.multiplier));
   }
-  v->playing = true;
+  this->pitch = freq;
 }
 
-void FMVoiceNoteOff(FMVoice *v) {
+void FMVoice::NoteOn(float freq) {
+  SetPitch(freq);
   for (int i=0; i<4; i++) {
-    v->envelopes[i].noteOff();
+    this->envelopes[i].noteOn();
   }
-  v->playing = false;
+  this->playing = true;
+}
+
+void FMVoice::NoteOff() {
+  for (int i=0; i<4; i++) {
+    this->envelopes[i].noteOff();
+  }
+  this->playing = false;
 }

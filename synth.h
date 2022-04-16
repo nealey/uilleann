@@ -73,21 +73,66 @@ typedef struct FMOperator {
  * can be accomplished by patching an operator into itself.
  */
 typedef struct FMPatch {
-  char *name;
+  const char *name;
   float gains[NUM_OPERATORS][NUM_OPERATORS+1];
   FMOperator operators[NUM_OPERATORS];
 } FMPatch;
 
 /** FMVoice sets up all the Audio objects for a voice.
  */
-typedef struct FMVoice {
-  AudioMixer4 mixers[NUM_OPERATORS];
-  AudioSynthWaveformModulated oscillators[NUM_OPERATORS];
-  AudioEffectEnvelope envelopes[NUM_OPERATORS];
-  AudioMixer4 outputMixer;
-  FMPatch *patch;
-  bool playing;
-} FMVoice;
+class FMVoice {
+  public:
+    /** LoadPatch loads a patch into a voice.
+     */
+    void LoadPatch(FMPatch *p);
+
+    /** SetPitch sets the pitch (Hz) of a voice.
+     *
+     * This does not signal the envelope in any way.
+     * You would use this for a glissando, portamento, or pitch bend.
+     * In my bagpipe, this prevents "reed noise" when changing notes.
+     */
+    void SetPitch(float pitch);
+
+    /** GetPitch returns the pitch (Hz) of a voice.
+     */
+    float GetPitch();
+
+    /** SetModulation sets the modulation amount of a voice.
+     * 
+     * What this means depends on the loaded patch.
+     * For  a "normal" bagpipe patch, this would adjust the intensity of
+     * of a filter, or set the level of an oscillator.
+     * In an old-school keyboard patch, this would set the
+     * intensity of a Low Frequency Oscillator to set a vibrato.
+     */
+    void setModulation(float level);
+
+    /** NoteOn sets the pitch (Hz) of a voice, and starts in playing.
+     *
+     * This tells the envelope generators to begin.
+     * On a piano, this is what you would use when a key is pressed.
+     * In my bagpipe, this triggers "reed noise".
+     */
+    void NoteOn(float pitch);
+
+    /** NoteOff stops a note from playing.
+     *
+     * This turns the voice "off" by shutting down all the envelope generators.
+     * On a piano, this is what you would use when a key is released.
+     * In my bagpipe, this corresponds to all holes being closed.
+     */
+    void NoteOff();
+
+
+    AudioMixer4 mixers[NUM_OPERATORS];
+    AudioSynthWaveformModulated oscillators[NUM_OPERATORS];
+    AudioEffectEnvelope envelopes[NUM_OPERATORS];
+    AudioMixer4 outputMixer;
+    FMPatch *patch;
+    float pitch;
+    bool playing;
+};
 
 /** FMOperatorWiring outputs AudioConnection initializers to wire one FM Operator
  */
@@ -108,30 +153,4 @@ typedef struct FMVoice {
   FMOperatorWiring(name, 2), \
   FMOperatorWiring(name, 3)
 
-/** FMVoiceLoadPatch loads a patch into a voice.
- */
-void FMVoiceLoadPatch(FMVoice *v, FMPatch *p);
 
-/** FMVoiceSetPitch sets the pitch (Hz) of a voice.
- *
- * This does not signal the envelope in any way.
- * You would use this for a glissando, portamento, or pitch bend.
- * In my bagpipe, this prevents "reed noise" when changing notes.
- */
-void FMVoiceSetPitch(FMVoice *v, float pitch);
-
-/** FMVoiceNoteOn sets the pitch (Hz) of a voice, and starts in playing.
- *
- * This tells the envelope generators to begin.
- * On a piano, this is what you would use when a key is pressed.
- * In my bagpipe, this triggers "reed noise".
- */
-void FMVoiceNoteOn(FMVoice *v, float pitch);
-
-/** FMVoiceNoteOff stops a note from playing.
- *
- * This turns the voice "off" by shutting down all the envelope generators.
- * On a piano, this is what you would use when a key is released.
- * In my bagpipe, this corresponds to all holes being closed.
- */
-void FMVoiceNoteOff(FMVoice *v);

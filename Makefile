@@ -1,5 +1,6 @@
 FQBN = adafruit:samd:adafruit_trellis_m4
-UF2_MOUNT = /mnt/chromeos/removable/TRELM4BOOT
+UF2_MOUNT = /media/neale/TRELM4BOOT
+ARDUINO_DIR = /opt/arduino-1.8.13
 
 default: build/uilleann.ino.uf2
 install: build/uilleann.ino.uf2
@@ -21,11 +22,11 @@ build/%.bin: % *.cpp *.h
 		-core-api-version 10813 \
 		-fqbn $(FQBN) \
 		-hardware ~/.arduino15/packages \
-		-tools /app/Arduino/tools-builder \
+		-tools $(ARDUINO_DIR)/tools-builder \
 		-tools ~/.arduino15/packages \
-		-hardware /app/Arduino/hardware \
+		-hardware $(ARDUINO_DIR)/hardware \
 		-hardware ~/.arduino15/packages \
-		-built-in-libraries /app/Arduino/libraries \
+		-built-in-libraries $(ARDUINO_DIR)/libraries \
 		-libraries ~/Arduino/libraries \
 		-compile \
 		$<

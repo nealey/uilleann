@@ -1,303 +1,240 @@
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 #include <Audio.h>
-#include <Wire.h>
-#include <Adafruit_NeoTrellisM4.h>
-#include <SFE_MicroOLED.h>
-#include <SparkFun_Qwiic_Button.h>
-#include <Adafruit_MPR121.h>
-#include "synth.h"
+#include <Fonts/FreeSans9pt7b.h>
+#include <stdio.h>
+
 #include "patches.h"
-#include "notes.h"
-#include "fingering.h"
+#include "pipe.h"
+#include "synth.h"
+#include "tuning.h"
 
-//#define DEBUG
-#define KNEE_OFFSET 0
-#define KEY_OFFSET 2
+const char *buildDate = __DATE__;
 
+#if defined(ADAFRUIT_TRELLIS_MAdafruit_SSD1306EXPRESS)
+#include <Adafruit_NeoTrellisM4.h>
+Adafruit_NeoTrellisM4 trellis;  // = Adafruit_NeoTrellisM4();
+#endif
+
+Pipe pipe;
+Tuning tuning = Tuning(NOTE_D4, PITCH_CONCERT_D4, TUNINGSYSTEM_JUST);
+
+Adafruit_SSD1306 display(128, 32, &Wire, -1);
+
+// Settings
+#define VOLUME_INITIAL 0.8
+uint8_t patch[4] = {0};
+float volume[5] = {VOLUME_INITIAL, VOLUME_INITIAL, VOLUME_INITIAL, VOLUME_INITIAL, 0.5};
+
+// Pipes
+#define NUM_DRONES 3
+#define NUM_REGULATORS 3
 FMVoice Chanter;
-FMVoice Drones[3];
-FMVoice Regulators[3];
+FMVoice Drones[NUM_DRONES];
+FMVoice Regulators[NUM_REGULATORS];
 
-AudioFilterBiquad        biquad1;
-AudioMixer4              mixDrones;
-AudioMixer4              mixRegulators;
-AudioMixer4              mixL;
-AudioMixer4              mixR;
-AudioOutputAnalogStereo  dacs1;
+AudioFilterBiquad biquad1;
+AudioMixer4 mixDrones;
+AudioMixer4 mixRegulators;
+AudioMixer4 mixL;
+AudioMixer4 mixR;
+AudioSynthNoiseWhite noise;
 
-AudioSynthNoiseWhite debug;
+#if defined(ADAFRUIT_TRELLIS_M4_EXPRESS)
+AudioOutputAnalogStereo out1;
+#else
+AudioOutputI2S out1;
+#endif
+
+AudioControlSGTL5000 sgtl5000;
 
 AudioConnection FMVoicePatchCords[] = {
-  {debug, 0, mixR, 3}, // Don't know why, but the first one is ignored
-  {debug, 0, mixL, 3},
+    {noise, 0, mixL, 3},
+    {noise, 0, mixR, 3},
 
-  {mixL, 0, dacs1, 0},
-  {mixR, 0, dacs1, 1},
+    {Chanter.outputMixer, 0, biquad1, 0},
+    {biquad1, 0, mixL, 0},
+    {biquad1, 0, mixR, 0},
 
-  {Chanter.outputMixer, 0, biquad1, 0},
-  {biquad1, 0, mixL, 0},
-  {biquad1, 0, mixR, 0},
+    {Drones[0].outputMixer, 0, mixDrones, 0},
+    {Drones[1].outputMixer, 0, mixDrones, 1},
+    {Drones[2].outputMixer, 0, mixDrones, 2},
+    {mixDrones, 0, mixL, 1},
+    {mixDrones, 0, mixR, 1},
 
-  {Drones[0].outputMixer, 0, mixDrones, 0},
-  {Drones[1].outputMixer, 0, mixDrones, 1},
-  {Drones[2].outputMixer, 0, mixDrones, 2},
-  {mixDrones, 0, mixL, 1},
-  {mixDrones, 0, mixR, 1},
+    {Regulators[0].outputMixer, 0, mixRegulators, 0},
+    {Regulators[1].outputMixer, 0, mixRegulators, 1},
+    {Regulators[2].outputMixer, 0, mixRegulators, 2},
+    {mixRegulators, 0, mixL, 2},
+    {mixRegulators, 0, mixR, 2},
 
-  {Regulators[0].outputMixer, 0, mixRegulators, 0},
-  {Regulators[1].outputMixer, 0, mixRegulators, 1},
-  {Regulators[2].outputMixer, 0, mixRegulators, 2},
-  {mixRegulators, 0, mixL, 2},
-  {mixRegulators, 0, mixR, 2},
+    {mixL, 0, out1, 0},
+    {mixR, 0, out1, 1},
 
-  FMVoiceWiring(Chanter),
-  FMVoiceWiring(Drones[0]),
-  FMVoiceWiring(Drones[1]),
-  FMVoiceWiring(Drones[2]),
-  FMVoiceWiring(Drones[3]),
-  FMVoiceWiring(Regulators[0]),
-  FMVoiceWiring(Regulators[1]),
-  FMVoiceWiring(Regulators[2]),
-  FMVoiceWiring(Regulators[3]),
+    FMVoiceWiring(Chanter),
+    FMVoiceWiring(Drones[0]),
+    FMVoiceWiring(Drones[1]),
+    FMVoiceWiring(Drones[2]),
+    FMVoiceWiring(Regulators[0]),
+    FMVoiceWiring(Regulators[1]),
+    FMVoiceWiring(Regulators[2]),
 };
 
-int currentPatch = 0;
+void blink(bool forever) {
+  for (;;) {
+    digitalWrite(LED_BUILTIN, true);
+    delay(200);
+    digitalWrite(LED_BUILTIN, false);
+    delay(200);
+    if (!forever) {
+      return;
+    }
+  }
+}
 
-Adafruit_MPR121 cap = Adafruit_MPR121();
-Adafruit_NeoTrellisM4 trellis = Adafruit_NeoTrellisM4();
-MicroOLED oled(9, 1);
-QwiicButton bag;
+void diag(const char *fmt, ...) {
+  va_list args;
+  char s[80];
+
+  va_start(args, fmt);
+  vsnprintf(s, sizeof(s) - 1, fmt, args);
+  va_end(args);
+
+  display.clearDisplay();
+  display.drawRect(124, 16, 4, 16, SSD1306_WHITE);
+  display.setTextColor(SSD1306_WHITE);
+  display.setFont();
+  display.setTextSize(1);
+
+  display.setCursor(56, 24);
+  display.print(buildDate);
+
+#if 0
+  display.setCursor(0, 16);
+  display.print(fn);
+  display.print(":");
+  display.print(lineno);
+#endif
+
+  display.setCursor(0, 0);
+  display.print(s);
+
+  display.display();
+}
+
+// The right way to do this would be to make a Uilleann object,
+// and pass that around.
+// The Auido library makes this sort of a pain,
+// and honestly, is anybody other than me going to use this?
+#include "main-play.h"
+#include "main-setup.h"
 
 void setup() {
-  setupJustPitches(NOTE_D4, PITCH_D4);
+  // PREPARE TO BLINK
   pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, true);
 
-  // Wire.begin needs a moment
-  delay(100);
+  // Set up I2C. Apparently this needs a bit of startup delay.
   Wire.begin();
 
-  // Initialize OLED display
-  oled.begin();
-  oled.clear(ALL);
+  // Initialize display
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3c)) {
+    blink(true);
+  }
+  digitalWrite(LED_BUILTIN, false);
+  diag("Hello!");
 
-  // Initialize bag
-  bag.begin();
-
-  // Initialize the Trellis
+#if defined(ADAFRUIT_TRELLIS_M4_EXPRESS)
+  diag("Trellis...");
   trellis.begin();
+#endif
 
-  // Initialize touch sensor
-  bool blink = true;
-  while (!cap.begin(0x5A)) {
-    oled.clear(PAGE);
-    oled.setCursor(0, 0);
-    oled.print("No Pipe?");
-    oled.display();
-
-    trellis.setPixelColor(0, blink?0xff6666:0);
-    blink = !blink;
-    delay(200);
+  diag("Pipe...");
+  while (!pipe.Init()) {
+    diag("Pipe connected?");
+    blink(false);
   }
 
-  // Set aside some memory for the audio library  
+  diag("Audio...");
   AudioMemory(120);
-
-  // initialize tunables
-  updateTunables(3, 0);
-
-  // Initialize processor and memory measurements
   AudioProcessorUsageMaxReset();
   AudioMemoryUsageMaxReset();
+  sgtl5000.enable();
+  sgtl5000.volume(volume[4]);
 
-  // Turn on drones
-  for (int i=0; i<3; i++) {
-    float detune = (1-i) * 0.002;
-    FMVoiceLoadPatch(&Drones[i], &Bank[0]);
-    FMVoiceNoteOn(&Drones[i], JustPitches[NOTE_D4 - 12*i] * (1 + detune));
-  }
+  diag("Synth...");
+  loadPatch(0);
+  loadPatch(1);
+  loadPatch(2);
+  noise.amplitude(1.0);
 
+  diag("Mixer...");
   // Turn on all mixer channels
-  for (int i=0; i<4; i++) {
-    mixL.gain(i, 0.5);
-    mixR.gain(i, 0.6);
+  for (int i = 0; i < 4; i++) {
+    mixL.gain(i, volume[i]);
+    mixR.gain(i, volume[i]);
   }
-  
-  debug.amplitude(0.1);
-  mixL.gain(3, 0);
-  mixR.gain(3, 0);
+  for (int i = 0; i < NUM_REGULATORS; ++i) {
+    mixRegulators.gain(i, 1);
+  }
+  for (int i = 0; i < NUM_DRONES; ++i) {
+    mixDrones.gain(i, 1);
+  }
+  biquad1.setNotch(0, PITCH_CONCERT_A4, 0.001);
+
+  diag("Drones...");
+  playDrones();
+
+  diag("Done!");
+  display.dim(true);
 }
 
-#define BUTTON_UP 0
-#define BUTTON_DOWN 8
-#define BUTTON_PITCH 24
-#define BUTTON_VOLUME 25
+void loadPatch(uint8_t where) {
+  FMPatch *p = &Bank[where];
 
-#define INIT_PITCH_ADJUST 0
-#define INIT_GAIN 0.7
-#define INIT_PATCH 0
-
-int16_t pitchAdjust;
-float chanterGain;
-int patch;
-
-void updateTunables(uint8_t buttons, int note) {
-  // Pitch adjust if playing A
-  if (!note || (note == NOTE_A4)) {
-    switch (buttons) {
-    case 3:
-      pitchAdjust = INIT_PITCH_ADJUST;
-      break;
-    case 2:
-      pitchAdjust += 4;
+  switch (where) {
+    case 0:
+      Chanter.LoadPatch(p);
       break;
     case 1:
-      pitchAdjust -= 4;
-      break;
-    }
-  }
-
-  float adj = pow(2, pitchAdjust / 32768.0);
-  setupJustPitches(NOTE_D4, PITCH_D4*adj);
-  trellis.setPixelColor(BUTTON_PITCH, trellis.ColorHSV(uint16_t(pitchAdjust), 255, 80));
-
-  if (!note || (note == NOTE_G4)) {
-    // Volume adjust if playing G
-    switch (buttons) {
-    case 3:
-      chanterGain = INIT_GAIN;
+      for (int i = 0; i < NUM_REGULATORS; ++i) {
+        Regulators[i].LoadPatch(p);
+      }
       break;
     case 2:
-      chanterGain = min(chanterGain+0.005, 1.0);
+      for (int i = 0; i < NUM_DRONES; ++i) {
+        Drones[i].LoadPatch(p);
+      }
       break;
-    case 1:
-      chanterGain = max(chanterGain-0.005, 0.0);
+    default:
       break;
-    }
-  }
-
-  for (int i=0; i<3; i++) {
-    mixL.gain(i, chanterGain);
-    mixR.gain(i, chanterGain);
-  }
-  trellis.setPixelColor(BUTTON_VOLUME, trellis.ColorHSV(uint16_t(chanterGain * 65535), 255, 80));
-
-  if (!note || (note == NOTE_CS5)) {
-    if (buttons == 3) {
-      patch = INIT_PATCH;
-    } else if (trellis.justPressed(BUTTON_DOWN)) {
-      patch -= 1;
-    } else if (trellis.justPressed(BUTTON_UP)) {
-      patch += 1;
-    }
-
-    // wrap
-    int bankSize = sizeof(Bank) / sizeof(Bank[0]);
-    patch = (patch + bankSize) % bankSize;
-
-    FMPatch *p = &Bank[patch];
-    FMVoiceLoadPatch(&Chanter, p);
-
-    oled.clear(PAGE);
-    oled.setFontType(0);
-    oled.setCursor(0, 0);
-    oled.print(p->name);
-    oled.setCursor(0, 10);
-    oled.print("Patch ");
-    oled.print(patch);
-    oled.display();
   }
 }
 
-const uint8_t CLOSEDVAL = 0x30;
-const uint8_t OPENVAL = 0x70;
-const uint8_t GLISSANDO_STEPS = OPENVAL - CLOSEDVAL;
-
-bool playing = false;
 
 void loop() {
-  uint8_t keys = 0;
-  uint8_t note;
-  uint8_t glissandoKeys = 0;
-  uint8_t glissandoNote;
-  float glissandoOpenness = 0;
-  bool silent = false;
-  bool knee = cap.filteredData(KNEE_OFFSET) < CLOSEDVAL;
-  uint8_t buttons = trellis.isPressed(BUTTON_DOWN)?1:0 | trellis.isPressed(BUTTON_UP)?2:0;
+  static bool upSetting = true;  // GET IT?
 
+  pipe.Update();
+
+#if defined(ADAFRUIT_TRELLIS_M4_EXPRESS)
   trellis.tick();
+#endif
 
-  for (int i = 0; i < 8; i++) {
-    uint16_t val = max(cap.filteredData(i+KEY_OFFSET), CLOSEDVAL);
-    float openness = ((val - CLOSEDVAL) / float(GLISSANDO_STEPS));
-
-    // keys = all keys which are at least touched
-    // glissandoKeys = all keys which are fully closed
-    // The glissando operation computes the difference.
-    if (openness < 1.0) {
-      glissandoOpenness = max(glissandoOpenness, openness);
-      bitSet(keys, i);
-
-      if (openness == 0.0) {
-        bitSet(glissandoKeys, i);
-      }
-    }
-    
-    // print key states
-    //trellis.setPixelColor(7 - i, trellis.ColorHSV(65536/12, 255, 120*openness));
-    trellis.setPixelColor(7 - i, trellis.ColorHSV(22222*openness, 255, 40));
-  }
-  
-  note = uilleann_matrix[keys];
-  glissandoNote = uilleann_matrix[glissandoKeys];
-
-  bool alt = note & 0x80;
-  bool galt = glissandoNote & 0x80;
-  note = note & 0x7f;
-  glissandoNote = glissandoNote & 0x7f;
-
-  // All keys closed + knee = no sound
-  if (knee) {
-    if (keys == 0xff) {
-      silent = true;
+  // If we're infinitely (for the sensor) off the knee,
+  // we might be in setup mode.
+  if (pipe.KneeClosedness == 0) {
+    // We only enter into setup mode if no keys are pressed.
+    // This hopefully avoids accidentally entering setup while playing.
+    // Like say you're playing a jaunty tune and suddenly there's an earthquake.
+    // You ought to be able to finish the tune off before your pipe goes into setup mode.
+    if (upSetting || (pipe.Keys == 0)) {
+      doSetup();
+      upSetting = true;
+      return;
     }
   }
 
-  // Jump octave if the bag is squished
-  //bag = !digitalRead(BAG);
-  if (bag.isPressed()) {
-    if (keys & bit(7)) {
-      note += 12;
-      glissandoNote += 12;
-    }
-  }
-
-  // Read some trellis button states
-  if (buttons) {
-    updateTunables(buttons, note);
-  }
-
-  if (silent) {
-    FMVoiceNoteOff(&Chanter);
-  } else {
-    // Calculate pitch, and glissando pitch
-    uint16_t pitch = JustPitches[note];
-    uint16_t glissandoPitch = JustPitches[glissandoNote];
-
-    if (alt) {
-      biquad1.setLowShelf(0, 2000, 0.2, 1);
-    } else {
-      biquad1.setHighShelf(0, 1000, 1.0, 1);
-    }
-  
-    // Bend pitch if fewer than 3 half steps away
-    if (abs(glissandoNote - note) < 3) {
-      float diff = glissandoPitch - pitch;
-      pitch += diff * glissandoOpenness;
-    }
-
-    if (Chanter.playing) {
-      FMVoiceSetPitch(&Chanter, pitch);
-    } else {
-      FMVoiceNoteOn(&Chanter, pitch);
-    }
-  }
+  doPlay(upSetting);
+  upSetting = false;
 }
