@@ -33,10 +33,7 @@ peg_d = magnet_id - 0.3;
 
 module cup() {
     union() {
-        difference() {
-            cylinder(h=cup_leg_h, d=cup_od);
-            translate([0, 0, wall]) cylinder(h=cup_leg_h, d=cup_id);
-        }
+        cylinder(h=wall, d=cup_od);
 
         // A peg in the middle to make it easier to assemble.
         // This goes all the way so we can print without supports
@@ -45,6 +42,11 @@ module cup() {
         // The tabs on the sides
         for (i = [0, 120, 240]) {
             rotate(i) {
+                rotate_extrude(angle=leg_angle) {
+                    translate([cup_id/2, 0, 0]) square([wall, cup_leg_h]);
+                }
+            }
+            rotate(i + leg_angle*0.1) {
                 rotate_extrude(angle=leg_angle*0.8) {
                     translate([cup_od/2, cup_leg_h-tab_w, 0]) square(tab_w);
                 }
@@ -95,7 +97,7 @@ module container() {
 
         // Now drill holes for the sensors
         for (x = [-1.27, 0, 1.27]) {
-            translate([x-0.3, 2-0.2, 0]) cube([0.6, 0.4, container_h]);
+            translate([x, 2, 0]) cube([0.8,0.8, container_h], center=true);
         }
     }
 }
