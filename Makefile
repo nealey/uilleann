@@ -1,6 +1,7 @@
 FQBN = adafruit:samd:adafruit_trellis_m4
 UF2_MOUNT = /media/neale/TRELM4BOOT
-ARDUINO_DIR = /opt/arduino-1.8.13
+ARDUINO_DIR = /app/Arduino
+BUILDER = flatpak run --command ${ARDUINO_DIR}/arduino-builder cc.arduino.arduinoide
 
 default: build/uilleann.ino.uf2
 install: build/uilleann.ino.uf2
