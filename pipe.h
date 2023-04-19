@@ -8,6 +8,9 @@
 
 #define NUM_KEYS 12
 
+// A mapping of MPR121 input to pipe key
+const int KeySensor[NUM_KEYS] = { 11, -1, 0, 1, 2, 3, 4, 5, 6, 7, -1, -1 };
+
 enum Adjust {
   ADJUST_DOWN = -1,
   ADJUST_NONE = 0,
@@ -17,9 +20,6 @@ enum Adjust {
 
 class Pipe {
  public:
-  // kneeClosedness indicates how "closed" the knee sensor is. 0 = wide open.
-  uint8_t KneeClosedness;
-
   // keys are which keys are being pressed.
   uint16_t Keys;
   uint16_t KeysLast;
@@ -70,8 +70,6 @@ class Pipe {
 
  private:
   Adafruit_MPR121 capSensor;
-  Adafruit_VL6180X kneeSensor;
-  QwiicButton bagSensor;
   bool bag_enabled;
   unsigned long nextRepeat[NUM_KEYS];
   bool typematicEvent(uint8_t key, uint16_t delay, uint16_t repeat);

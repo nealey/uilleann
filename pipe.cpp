@@ -16,16 +16,8 @@ bool Pipe::Init() {
   if (!capSensor.begin(0x5A)) {
     return false;
   }
-
-  // Knee sensor
-  if (!kneeSensor.begin()) {
-    return false;
-  }
   
   // Bag button
-  bagSensor.begin();
-  // This library takes the entire program out if you poll it 5-40 times without anything connected
-  bag_enabled = bagSensor.isConnected();
 
   return true;
 }
@@ -37,29 +29,31 @@ void Pipe::Update() {
   Keys = 0;
 
   // Read the bag state, if there's a bag.
-  // if there isn't a bag, don't try, or this library will crash the program.
   if (bag_enabled) {
-    Bag = bagSensor.isPressed();
+    // XXX: re-enable the bag sensor at some point
+    //Bag = bagSensor.isPressed();
   } else {
     Bag = false;
   }
 
-  // 0x6c is actually 8 bytes, but all 8 are always the same...
-  KneeClosedness = 255 - kneeSensor.readRange();
-
   for (int i = 0; i < NUM_KEYS; ++i) {
+    int key = KeySensor[i];
+    if (key == -1) {
+      continue;
+    }
+
     uint16_t sensorReading = capSensor.filteredData(i);
     uint16_t val = OPENVAL - min(max(sensorReading, CLOSEDVAL), OPENVAL);
-    KeyPressure[i] = val / float(GLISSANDO_STEPS);
+    KeyPressure[key] = val / float(GLISSANDO_STEPS);
 
     // keys = all keys which are at least touched
     // glissandoKeys = all keys which are fully closed
     // The glissando operation computes the difference.
-    if (KeyPressure[i] > 0.0) {
-      bitSet(Keys, i);
+    if (KeyPressure[key] > 0.0) {
+      bitSet(Keys, key);
     }
-    if (KeyPressure[i] == 1.0)  {
-      bitSet(glissandoKeys, i);
+    if (KeyPressure[key] == 1.0)  {
+      bitSet(glissandoKeys, key);
     }
   }
 
@@ -81,6 +75,9 @@ void Pipe::Update() {
   // Was the high bit set? That indicates "alternate fingering", which sounds different.
   AltFingering = f.alt;
 
+  // All keys closed + knee = no sound
+  Silent = ((KeyPressure[11] > 0) && (CurrentNote == NOTE_D4));
+
   // If the bag is squished, jump up an octave
   // But only if the left thumb is down!
   if (Bag && (Keys & bit(7))) {
@@ -88,8 +85,6 @@ void Pipe::Update() {
     GlissandoNote += NOTE_OCTAVE;
   }
 
-  // All keys closed + knee = no sound
-  Silent = ((KneeClosedness > 240) && (Keys == 0xff));
 }
 
 bool Pipe::Pressed(uint8_t key) {
