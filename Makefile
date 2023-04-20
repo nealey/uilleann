@@ -8,10 +8,13 @@ install: build/uilleann.ino.uf2
 	./install.sh $< $(UF2_MOUNT)
 
 # uf2conv.py is covered by an MIT license.
-build/uf2conv.py:
+build/uf2conv.py: build/uf2families.json
 	mkdir -p build
-	curl -L https://raw.githubusercontent.com/microsoft/uf2/master/utils/uf2conv.py > $@
+	curl -L https://raw.githubusercontent.com/microsoft/uf2/master/utils/$(@F) > $@
 	chmod +x $@
+build/uf2families.json:
+	mkdir -p build
+	curl -L https://raw.githubusercontent.com/microsoft/uf2/master/utils/$(@F) > $@
 
 %.uf2: %.bin build/uf2conv.py
 	build/uf2conv.py -b 0x4000 -c -o $@ $<
