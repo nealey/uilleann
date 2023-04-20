@@ -51,7 +51,6 @@ void doPlay(bool forceDisplayUpdate) {
     updateDisplay = true;
   }
 
-#if 0
   if (updateDisplay) {
     // Look up the note name
     const char *noteName = NoteName(pipe.CurrentNote);
@@ -69,5 +68,4 @@ void doPlay(bool forceDisplayUpdate) {
     display.display();
     last_note = pipe.CurrentNote;
   }
-#endif
 }
