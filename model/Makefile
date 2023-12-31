@@ -1,7 +1,4 @@
-default: chanter.stl button-container.stl button-cup.stl
-
-button-%.stl: button-%.scad button.scad
-	openscad -o $@ $<
+default: chanter.stl
 
 %.stl: %.scad
 	openscad -o $@ $<
