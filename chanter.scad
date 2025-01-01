@@ -1,12 +1,8 @@
 // Based on O'Flynn Rowsome Chanter Measurements
 // http://pipers.ie/source/media/?mediaId=31307&galleryId=1353
 
-// DIameter of screw hole
+// Diameter of screw hole
 Screwhole = 4; // [1:10]
-
-// Part to generate
-Part = "all"; // [all, top-front, top-back, bottom-front, bottom-back]
-
 
 module metal() {
     color("silver") children();
@@ -133,12 +129,20 @@ module chanter() {
                 translate([0, 0, 36.2]) ivory() patty(h=4.6, d=25.4);
             }
             
-            // I presume this protects the reed and provides a place for tubing to connect
+            // This protects the reed and provides a place for tubing to connect
             translate([0, 0, 324.5]) metal() cylinder(h=32.7, d=14.8);
             
             // Bumpouts
             // These angles are my best guess based on photos
             rotate(220) wood() bumpout(161.2, 14.8, 6); // protrusion guessed
+        }
+
+        // Inner bore
+        union() {
+            translate([0, 0, -0.01]) { // Go just a bit past the ends
+                translate([0, 0,   0]) cylinder(h=337.01, d1=13.2, d2=5.51);
+                translate([0, 0, 337]) cylinder(h=21, d1=5.51, d2=7.1);
+            }
         }
 
         // Tone Holes!
@@ -155,7 +159,8 @@ module chanter() {
     }
 }
 
-intersection() {
-    chanter();
-    cube(400);
-}
+//intersection() {
+    //chanter();
+    //cube(400);
+//}
+chanter();
