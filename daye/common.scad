@@ -1,6 +1,9 @@
 // Make circles circular in final renders.
 $fn = $preview ? 0 : 60;
 
+// clearance in a permanent tenon/mortise joint
+clearance = 0.04;
+
 module brass() {
   color("gold") children();
 }

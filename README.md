@@ -6,10 +6,17 @@ This is my work to model a 3D printable Uilleann Pipe full set.
 I need a better name for this project.
 
 
-Chanter
+Daye
+====
+
+Based on David Daye's Budget Drones and Penny Chanter owned by me.
+David Daye has published extensive notes on how to recreate his builds
+at <https://daye1.com/>, including measurements for these parts.
+
+Rowsome
 =======
 
-The chanter is based on the O'Flynn Leo Rewsome set,
+This is based on the O'Flynn Leo Rewsome set,
 documented at pipers.id.
 
 http://pipers.ie/source/section/?sectionId=8 has been invaluable, providing
