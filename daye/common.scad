@@ -9,7 +9,7 @@ module brass() {
 }
 
 module derlin() {
-  color("steelblue") children();
+  color("dimgray") children();
 }
 
 // tube creates a hollow cylinder
@@ -36,8 +36,7 @@ brass_thickness = 0.75;
 // brass_tube creates a chamfered hollow cylinder with given inside diameter,
 // and wall thickness of 0.75.
 // Decorative rings are etched into the top and bottom.
-module brass_tube(h=10, d=10, t=brass_thickness) {
-  id = d;
+module brass_tube(h=10, id=10, t=brass_thickness) {
   od = id + (t*2);
   cd = (id + od) / 2; // Chamfer diameter
 
@@ -54,6 +53,23 @@ module brass_tube(h=10, d=10, t=brass_thickness) {
     }
   }
 }
+
+// brass_bend provides a 180 degree bend in brass
+module brass_bend(od=12.7, bend_r=16, t=brass_thickness) {
+  color("gold") {
+    rotate([90, 0, 0]) {
+      rotate_extrude(angle=180) {
+        translate([bend_r, 0, 0]) {
+          difference() {
+            circle(d=od);
+            circle(d=od-t*2);
+          }
+        }
+      }
+    }
+  }
+}
+
 
 // derlin_tube is a non-chamfered sky blue tube.
 // I use blue so it's easier to see in preview.

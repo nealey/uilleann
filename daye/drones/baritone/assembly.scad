@@ -11,7 +11,7 @@ endid = 7.5;
 endod = 13.7;
 
 module drone_baritone_tuner_barrel() {
-  brass_tube(h=tubeh, d=tubed);
+  brass_tube(h=tubeh, id=tubed);
 }
 
 module drone_baritone_tuner_end() {
