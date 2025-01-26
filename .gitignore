@@ -1,4 +1,5 @@
 .vscode
 build
 *.stl
+*.3mf
 pcb/pcb-backups/

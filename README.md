@@ -6,6 +6,28 @@ This is my work to model a 3D printable Uilleann Pipe full set.
 I need a better name for this project.
 
 
+Printing Advice
+=============
+
+Reeds
+------
+
+The Daye drones feature 3D printable reeds,
+based on the laudable work of Animatorgeek.
+Reeds need to simulate natural cane,
+so the following print settings should be used on every reed:
+
+Fill pattern: Aligned Rectilinear  
+Fill density: 100%  
+Fill angle: 90°  
+Bottom solid layers: 0  
+Layer height: 0.05  
+Perimiters: 1  
+Seam position:  Aligned (or whatever gets seams off the reed and onto the base)  
+Top solid layers: 0  
+
+Some light sanding may be required after printing.
+
 Daye
 ====
 
