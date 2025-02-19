@@ -12,6 +12,10 @@ module derlin() {
   color("dimgray") children();
 }
 
+module ivory() {
+  color("ivory") children();
+}
+
 // tube creates a hollow cylinder
 module tube(h=10, id=5, od=10) {
   difference() {
