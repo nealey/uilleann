@@ -1,6 +1,6 @@
+include <../common.scad>
 use <./chanter.scad>
 
-intersection() {
+tenon(top=false) {
   chanter();
-  cut();
 }

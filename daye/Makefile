@@ -5,3 +5,5 @@ clean:
 
 %.stl: %.scad
 	openscad -o $@ $<
+
+chanter/chanter-%.stl: chanter/chanter-%.scad chanter/chanter.scad

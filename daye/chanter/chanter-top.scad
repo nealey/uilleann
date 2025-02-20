@@ -1,6 +1,5 @@
 use <./chanter.scad>
 
-difference() {
+tenon(top=true) {
   chanter();
-  cut();
 }

@@ -2,7 +2,7 @@
 $fn = $preview ? 0 : 60;
 
 // clearance in a permanent tenon/mortise joint
-clearance = 0.04;
+clearance = 0.03;
 
 module brass() {
   color("gold") children();
